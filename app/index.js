@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import * as Device from 'expo-device';
 import * as ImagePicker from 'expo-image-picker';
+import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +21,51 @@ import {
   View
 } from 'react-native';
 
+// --- BİLDİRİM FONKSİYONLARI ---
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+async function schedulePushNotification(petName, reminderText, date) {
+  const trigger = date;
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: `${petName} için Hatırlatıcı! 🐾`,
+      body: reminderText,
+    },
+    trigger,
+  });
+}
+
+async function registerForPushNotificationsAsync() {
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return;
+    }
+  }
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+}
+
 // --- 1. EKRAN: ANA SAYFA (TAKVİMLİ HATIRLATICI) ---
 function HomeScreen({ petList, setPetList }) {
   const [selectedPet, setSelectedPet] = useState(null);
@@ -28,7 +75,10 @@ function HomeScreen({ petList, setPetList }) {
 
   // Hatırlatıcı Ekleme
   const addReminder = async () => {
-    if (!reminderText) return;
+    if (!reminderText || !selectedPet) return;
+
+    // Bildirimi planla
+    await schedulePushNotification(selectedPet.name, reminderText, date);
     
     // Tarihi okunabilir formata çeviriyoruz (Örn: 15/05/2026)
     const formattedDate = date.toLocaleDateString('tr-TR');
@@ -244,6 +294,8 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    registerForPushNotificationsAsync(); // Bildirim izni iste
+
     const load = async () => {
       const saved = await AsyncStorage.getItem('@pet_list');
       if (saved) setPetList(JSON.parse(saved));
