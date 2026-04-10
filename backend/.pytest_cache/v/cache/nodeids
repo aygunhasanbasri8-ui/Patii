@@ -1,0 +1,23 @@
+[
+  "test_main.py::TestAnalyzeMeow::test_analyze_meow",
+  "test_main.py::TestAnalyzeMeow::test_analyze_meow_no_auth",
+  "test_main.py::TestLogin::test_login_nonexistent_user",
+  "test_main.py::TestLogin::test_login_success",
+  "test_main.py::TestLogin::test_login_wrong_password",
+  "test_main.py::TestPets::test_add_pet",
+  "test_main.py::TestPets::test_add_pet_no_auth",
+  "test_main.py::TestPets::test_get_my_pets",
+  "test_main.py::TestPets::test_get_my_pets_empty",
+  "test_main.py::TestPets::test_get_my_pets_no_auth",
+  "test_main.py::TestPets::test_update_and_delete_pet",
+  "test_main.py::TestRegister::test_register_duplicate_email",
+  "test_main.py::TestRegister::test_register_missing_fields",
+  "test_main.py::TestRegister::test_register_success",
+  "test_main.py::TestReminders::test_add_reminder",
+  "test_main.py::TestReminders::test_add_reminder_pet_not_found",
+  "test_main.py::TestReminders::test_delete_reminder",
+  "test_main.py::TestReminders::test_delete_reminder_not_found",
+  "test_main.py::TestReminders::test_get_pet_reminders",
+  "test_main.py::TestReminders::test_reminder_history",
+  "test_main.py::TestReminders::test_reminders_no_auth"
+]
