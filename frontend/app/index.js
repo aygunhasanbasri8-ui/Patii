@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const BACKEND_BASE_URL = 'http://10.0.2.2:8000';
@@ -48,7 +48,7 @@ function AuthGate({
 }) {
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Pati'ye Hoş Geldin</Text>
+      <Text style={styles.title}>Pati&apos;ye Hoş Geldin</Text>
       <Text style={styles.subtitle}>Devam etmek için giriş yap.</Text>
       <View style={styles.switchRow}>
         <TouchableOpacity style={[styles.switchBtn, mode === 'login' && styles.switchBtnActive]} onPress={() => setMode('login')}>
@@ -210,7 +210,7 @@ export default function Page() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ full_name: '', email: '', password: '' });
   const [authToken, setAuthToken] = useState('');
-  const [userName, setUserName] = useState('');
+  const [, setUserName] = useState('');
   const [userId, setUserId] = useState('');
   const [pets, setPets] = useState([]);
   const [selected, setSelected] = useState(0);
@@ -231,11 +231,11 @@ export default function Page() {
     setSelected(0);
   };
 
-  const fetchReminders = async () => {
+  const fetchReminders = useCallback(async () => {
     if (!selectedPet?.id) return;
     const data = await requestApi(`/api/reminders/pet/${selectedPet.id}`, {}, authToken);
     setReminders(Array.isArray(data) ? data : []);
-  };
+  }, [selectedPet?.id, authToken]);
 
   useEffect(() => {
     const init = async () => {
@@ -258,6 +258,7 @@ export default function Page() {
       }
     };
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -267,7 +268,7 @@ export default function Page() {
       setReminders([]);
       setHistory([]);
     }
-  }, [selectedPet?.id, authToken]);
+  }, [selectedPet?.id, authToken, fetchReminders]);
 
   const onRegister = async () => {
     if (!registerForm.full_name || !registerForm.email || !registerForm.password) return Alert.alert('Eksik alan', 'Tüm alanları doldurun.');
@@ -336,7 +337,7 @@ export default function Page() {
       species: selectedPet?.species || '',
       breed: selectedPet?.breed || '',
     });
-  }, [selected]);
+  }, [selected, selectedPet?.name, selectedPet?.species, selectedPet?.breed]);
 
   const onSavePet = async () => {
     if (!draftPet.name.trim() || !draftPet.species.trim() || !draftPet.breed.trim()) return Alert.alert('Eksik alan', 'Ad, tür ve cins gerekli.');
