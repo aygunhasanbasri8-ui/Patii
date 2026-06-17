@@ -40,6 +40,7 @@ export default function Page() {
   const [history, setHistory] = useState([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [reminderForm, setReminderForm] = useState({ title: '', description: '', remind_at: '' });
+  const [editingReminderId, setEditingReminderId] = useState(null);
 
   const [analyzeResult, setAnalyzeResult] = useState(null);
 
@@ -85,6 +86,8 @@ export default function Page() {
   useEffect(() => {
     setHistory([]);
     setHistoryLoaded(false);
+    setEditingReminderId(null);
+    setReminderForm({ title: '', description: '', remind_at: '' });
     if (selectedPet?.id && authToken) {
       fetchReminders().catch((e) => showError('Hata', e));
     } else {
@@ -254,10 +257,56 @@ export default function Page() {
     }
   };
 
+  // Reminder.text backend'de "title: description" formatında birleştirilmiş
+  // saklanıyor (bkz. services.py add_reminder). Düzenleme formunu doldurmak
+  // için bunu geri ayırıyoruz.
+  const onEditReminder = (reminder) => {
+    const [title, ...rest] = reminder.text.split(': ');
+    setReminderForm({
+      title: title || '',
+      description: rest.join(': ') || '',
+      remind_at: reminder.date || '',
+    });
+    setEditingReminderId(reminder.id);
+  };
+
+  const onCancelEditReminder = () => {
+    setEditingReminderId(null);
+    setReminderForm({ title: '', description: '', remind_at: '' });
+  };
+
+  const onUpdateReminder = async () => {
+    if (!editingReminderId) return;
+    const { title, description, remind_at } = reminderForm;
+    if (!title.trim() || !description.trim() || !remind_at.trim()) {
+      Alert.alert('Eksik alan', 'Tüm alanları doldurmalısın.');
+      return;
+    }
+    if (!isValidReminderDate(remind_at.trim())) {
+      Alert.alert('Geçersiz tarih', 'Tarihi gg/aa/yyyy formatında gir. Örn: 15/04/2026');
+      return;
+    }
+    try {
+      setLoading(true);
+      await api.updateReminder(
+        editingReminderId,
+        { title: title.trim(), description: description.trim(), remind_at: remind_at.trim() },
+        authToken
+      );
+      onCancelEditReminder();
+      await fetchReminders();
+    } catch (e) {
+      showError('Güncelleme hatası', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onDeleteReminder = async (id) => {
     try {
       setLoading(true);
       await api.deleteReminder(id, authToken);
+      if (editingReminderId === id) onCancelEditReminder();
       await fetchReminders();
     } catch (e) {
       showError('Silme hatası', e);
@@ -395,6 +444,10 @@ export default function Page() {
             form={reminderForm}
             setForm={setReminderForm}
             onAdd={onAddReminder}
+            onUpdate={onUpdateReminder}
+            onCancelEdit={onCancelEditReminder}
+            editingId={editingReminderId}
+            onEdit={onEditReminder}
             onDelete={onDeleteReminder}
             onLoadHistory={onLoadHistory}
             loading={loading}

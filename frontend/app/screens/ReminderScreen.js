@@ -11,7 +11,7 @@ export function isValidReminderDate(value) {
   return DATE_RE.test(value);
 }
 
-function ReminderRow({ reminder, onDelete, past = false }) {
+function ReminderRow({ reminder, onDelete, onEdit, past = false }) {
   const [title, ...rest] = reminder.text.split(': ');
   const description = rest.join(': ');
   return (
@@ -23,11 +23,21 @@ function ReminderRow({ reminder, onDelete, past = false }) {
         </View>
         <Badge label={reminder.date} tone={past ? 'danger' : 'primary'} />
       </View>
-      {!past && onDelete ? (
-        <TouchableOpacity style={styles.deleteLink} onPress={() => onDelete(reminder.id)}>
-          <Ionicons name="trash-outline" size={14} color={colors.danger} />
-          <Text style={styles.deleteLinkText}>Sil</Text>
-        </TouchableOpacity>
+      {!past ? (
+        <View style={styles.actionRow}>
+          {onEdit ? (
+            <TouchableOpacity style={styles.actionLink} onPress={() => onEdit(reminder)}>
+              <Ionicons name="create-outline" size={14} color={colors.primaryDark} />
+              <Text style={styles.editLinkText}>Düzenle</Text>
+            </TouchableOpacity>
+          ) : null}
+          {onDelete ? (
+            <TouchableOpacity style={styles.actionLink} onPress={() => onDelete(reminder.id)}>
+              <Ionicons name="trash-outline" size={14} color={colors.danger} />
+              <Text style={styles.deleteLinkText}>Sil</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -40,7 +50,11 @@ export default function ReminderScreen({
   form,
   setForm,
   onAdd,
+  onUpdate,
+  onCancelEdit,
+  editingId,
   onDelete,
+  onEdit,
   onLoadHistory,
   historyLoaded,
   loading,
@@ -57,12 +71,20 @@ export default function ReminderScreen({
     );
   }
 
+  const isEditing = !!editingId;
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Hatırlatıcılar</Text>
       <Text style={styles.subtitle}>{selectedPet.name} için aşı, ilaç ve randevuları takip et.</Text>
 
       <View style={styles.formCard}>
+        {isEditing ? (
+          <View style={styles.editingBanner}>
+            <Ionicons name="create-outline" size={14} color={colors.primaryDark} />
+            <Text style={styles.editingBannerText}>Hatırlatıcı düzenleniyor</Text>
+          </View>
+        ) : null}
         <Input
           label="Başlık"
           placeholder="Örn: Kuduz Aşısı"
@@ -82,7 +104,15 @@ export default function ReminderScreen({
           onChangeText={(v) => setForm((p) => ({ ...p, remind_at: v }))}
           keyboardType="numbers-and-punctuation"
         />
-        <Button title="Hatırlatıcı Ekle" loading={loading} style={{ marginTop: spacing.lg }} onPress={onAdd} />
+        <Button
+          title={isEditing ? 'Güncelle' : 'Hatırlatıcı Ekle'}
+          loading={loading}
+          style={{ marginTop: spacing.lg }}
+          onPress={isEditing ? onUpdate : onAdd}
+        />
+        {isEditing ? (
+          <Button title="Vazgeç" variant="ghost" style={{ marginTop: spacing.xs }} onPress={onCancelEdit} />
+        ) : null}
       </View>
 
       <SectionHeader title="Aktif Hatırlatıcılar" />
@@ -93,7 +123,7 @@ export default function ReminderScreen({
           description="Yukarıdan yeni bir hatırlatıcı ekleyebilirsin."
         />
       ) : (
-        reminders.map((r) => <ReminderRow key={r.id} reminder={r} onDelete={onDelete} />)
+        reminders.map((r) => <ReminderRow key={r.id} reminder={r} onDelete={onDelete} onEdit={onEdit} />)
       )}
 
       <SectionHeader
@@ -137,7 +167,19 @@ const styles = StyleSheet.create({
   reminderTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   reminderTitle: { ...typography.bodyStrong, color: colors.textPrimary },
   reminderDescription: { ...typography.body, color: colors.textSecondary, marginTop: 2 },
-  deleteLink: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm },
+  actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.lg },
+  actionLink: { flexDirection: 'row', alignItems: 'center' },
   deleteLinkText: { ...typography.caption, color: colors.danger, marginLeft: 4 },
+  editLinkText: { ...typography.caption, color: colors.primaryDark, marginLeft: 4 },
+  editingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  editingBannerText: { ...typography.caption, color: colors.primaryDark, marginLeft: spacing.xs },
   loadHistoryLink: { ...typography.bodyStrong, color: colors.primaryDark },
 });

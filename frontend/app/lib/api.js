@@ -1,8 +1,3 @@
-// lib/api.js
-// Backend ile iletişimin tek noktası. Vize raporundaki tespit edilen
-// eksiklik şuydu: "Frontend'de ağ bağlantısı kesilmesi veya zaman aşımı
-// gibi senaryolar için özel bir hata yönetimi stratejisi bulunmamaktadır."
-// Bu dosya, timeout + network-down ayrımını da ekleyerek o boşluğu kapatır.
 
 export const BACKEND_BASE_URL = 'http://localhost:8000';
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -91,6 +86,9 @@ export const analyzeMeow = (petId, token) =>
 // --- Reminders ------------------------------------------------------------------
 export const addReminder = (payload, token) =>
   requestApi('/api/reminders/add', { method: 'POST', body: JSON.stringify(payload) }, token);
+
+export const updateReminder = (reminderId, payload, token) =>
+  requestApi(`/api/reminders/${reminderId}`, { method: 'PUT', body: JSON.stringify(payload) }, token);
 
 export const getPetReminders = (petId, token) =>
   requestApi(`/api/reminders/pet/${petId}`, {}, token);
