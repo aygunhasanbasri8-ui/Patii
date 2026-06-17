@@ -1,14 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Badge } from '../components/UI';
 import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
 
-export default function AnalyzeScreen({ selectedPet, result, onAnalyze, loading }) {
+// recordingState: 'idle' | 'recording' | 'uploading'
+export default function AnalyzeScreen({ selectedPet, result, recordingState, onToggleRecording }) {
   const pulse = useRef(new Animated.Value(1)).current;
+  const isRecording = recordingState === 'recording';
+  const isUploading = recordingState === 'uploading';
 
   useEffect(() => {
-    if (!loading) {
+    if (!isRecording) {
       pulse.setValue(1);
       return;
     }
@@ -20,7 +23,13 @@ export default function AnalyzeScreen({ selectedPet, result, onAnalyze, loading 
     );
     loop.start();
     return () => loop.stop();
-  }, [loading, pulse]);
+  }, [isRecording, pulse]);
+
+  const hint = isRecording
+    ? 'Dinleniyor… durdurmak için tekrar dokun'
+    : isUploading
+    ? 'Analiz ediliyor…'
+    : 'Kayda başlamak için dokun';
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -30,24 +39,35 @@ export default function AnalyzeScreen({ selectedPet, result, onAnalyze, loading 
       </Text>
 
       <View style={styles.micWrap}>
-        <Animated.View style={[styles.micRing, { transform: [{ scale: pulse }] }]} />
+        <Animated.View style={[styles.micRing, isRecording && styles.micRingActive, { transform: [{ scale: pulse }] }]} />
         <TouchableOpacity
-          style={[styles.micButton, !selectedPet && styles.micButtonDisabled]}
-          onPress={onAnalyze}
-          disabled={!selectedPet || loading}
+          style={[styles.micButton, (!selectedPet || isUploading) && styles.micButtonDisabled, isRecording && styles.micButtonRecording]}
+          onPress={onToggleRecording}
+          disabled={!selectedPet || isUploading}
           activeOpacity={0.85}
         >
-          <Ionicons name={loading ? 'pulse' : 'mic'} size={42} color={colors.textOnPrimary} />
+          {isUploading ? (
+            <ActivityIndicator color={colors.textOnPrimary} size="large" />
+          ) : (
+            <Ionicons name={isRecording ? 'stop' : 'mic'} size={42} color={colors.textOnPrimary} />
+          )}
         </TouchableOpacity>
-        <Text style={styles.micHint}>
-          {loading ? 'Dinleniyor…' : 'Analiz etmek için dokun'}
-        </Text>
+        <Text style={styles.micHint}>{hint}</Text>
       </View>
 
       {result ? (
         <View style={styles.resultCard}>
-          <Badge label={result.status} tone="success" />
+          <View style={styles.resultHeaderRow}>
+            <Badge label={result.status} tone="success" />
+            {result.source ? (
+              <Badge
+                label={result.source === 'model' ? 'AI Modeli' : 'Genel Öneri'}
+                tone={result.source === 'model' ? 'info' : 'primary'}
+              />
+            ) : null}
+          </View>
           <Text style={styles.resultText}>{result.result}</Text>
+          {result.advice ? <Text style={styles.adviceText}>{result.advice}</Text> : null}
           <View style={styles.confidenceRow}>
             <View style={styles.confidenceTrack}>
               <View style={[styles.confidenceFill, { width: `${Math.round((result.confidence || 0) * 100)}%` }]} />
@@ -77,6 +97,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.circle,
     backgroundColor: colors.surfaceSoft,
   },
+  micRingActive: {
+    backgroundColor: colors.dangerSoft,
+  },
   micButton: {
     width: 120,
     height: 120,
@@ -85,6 +108,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow.floating,
+  },
+  micButtonRecording: {
+    backgroundColor: colors.danger,
   },
   micButtonDisabled: {
     backgroundColor: colors.primaryLight,
@@ -97,7 +123,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...shadow.card,
   },
+  resultHeaderRow: { flexDirection: 'row', gap: spacing.sm },
   resultText: { ...typography.title, color: colors.textPrimary, marginTop: spacing.md },
+  adviceText: { ...typography.body, color: colors.textSecondary, marginTop: spacing.sm },
   confidenceRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, gap: spacing.sm },
   confidenceTrack: { flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: colors.surfaceSoft, overflow: 'hidden' },
   confidenceFill: { height: '100%', backgroundColor: colors.success, borderRadius: radius.pill },

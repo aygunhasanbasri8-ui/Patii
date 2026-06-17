@@ -1,5 +1,4 @@
-
-export const BACKEND_BASE_URL = 'http://localhost:8000';
+export const BACKEND_BASE_URL = 'http://192.168.1.4:8000';
 const DEFAULT_TIMEOUT_MS = 10000;
 
 export class ApiError extends Error {
@@ -10,15 +9,17 @@ export class ApiError extends Error {
   }
 }
 
-async function requestApi(path, options = {}, authToken = '') {
+async function requestApi(path, options = {}, authToken = '', timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
   let response;
   try {
     response = await fetch(`${BACKEND_BASE_URL}${path}`, {
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         ...(options.headers || {}),
       },
@@ -42,7 +43,6 @@ async function requestApi(path, options = {}, authToken = '') {
         msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
       }
     } catch (_e) {
-      // gövde JSON değilse durum koduna düşülür
     }
     throw new ApiError(msg, { status: response.status, kind: 'http' });
   }
@@ -62,11 +62,6 @@ export const register = (payload) =>
 export const login = (payload) =>
   requestApi('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
 
-// --- Pets -------------------------------------------------------------------
-// BOLA düzeltmesi sonrası: owner_id artık backend tarafından token'dan
-// çözülen kullanıcıya göre otomatik atanıyor, frontend'in göndermesine
-// gerek yok (ve göndermemeli — payload'da owner_id varsa backend onu
-// yok sayar, çünkü PetCreate şemasından kaldırıldı).
 export const addPet = (payload, token) =>
   requestApi('/api/pets/add', { method: 'POST', body: JSON.stringify(payload) }, token);
 
@@ -79,9 +74,23 @@ export const updatePet = (petId, payload, token) =>
 export const deletePet = (petId, token) =>
   requestApi(`/api/pets/${petId}`, { method: 'DELETE' }, token);
 
-// --- Analyze ------------------------------------------------------------------
-export const analyzeMeow = (petId, token) =>
-  requestApi(`/api/analyze/meow?pet_id=${petId}`, { method: 'POST' }, token);
+export const analyzeMeow = (petId, token, audioUri = null) => {
+  if (!audioUri) {
+    return requestApi(`/api/analyze/meow?pet_id=${petId}`, { method: 'POST' }, token, 25000);
+  }
+  const formData = new FormData();
+  formData.append('audio', {
+    uri: audioUri,
+    name: 'meow.wav',
+    type: 'audio/wav',
+  });
+  return requestApi(
+    `/api/analyze/meow?pet_id=${petId}`,
+    { method: 'POST', body: formData },
+    token,
+    25000
+  );
+};
 
 // --- Reminders ------------------------------------------------------------------
 export const addReminder = (payload, token) =>

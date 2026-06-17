@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, TouchableOpacity, View } from 'react-native';
 import * as api from './lib/api';
 import { ApiError } from './lib/api';
 import { useAuth } from './hooks/useAuth';
+import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { colors } from './theme/tokens';
 
 import AuthScreen from './screens/AuthScreen';
@@ -26,6 +27,7 @@ function showError(prefix, error) {
 export default function Page() {
   const auth = useAuth();
   const { authToken, userName, userId } = auth;
+  const audioRecorder = useAudioRecorder();
 
   const [bootLoading, setBootLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
@@ -43,6 +45,8 @@ export default function Page() {
   const [editingReminderId, setEditingReminderId] = useState(null);
 
   const [analyzeResult, setAnalyzeResult] = useState(null);
+  // 'idle' | 'recording' | 'uploading'
+  const [recordingState, setRecordingState] = useState('idle');
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
@@ -79,10 +83,8 @@ export default function Page() {
       }
     };
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Seçili pati değiştiğinde hatırlatıcıları tazele
   useEffect(() => {
     setHistory([]);
     setHistoryLoaded(false);
@@ -95,7 +97,6 @@ export default function Page() {
     }
   }, [selectedPet?.id, authToken, fetchReminders]);
 
-  // Seçim değişince taslak formu güncelle
   useEffect(() => {
     setDraftPet({
       name: selectedPet?.name || '',
@@ -103,6 +104,16 @@ export default function Page() {
       breed: selectedPet?.breed || '',
     });
   }, [selected, selectedPet?.name, selectedPet?.species, selectedPet?.breed]);
+
+
+  useEffect(() => {
+    if (recordingState === 'recording') {
+      audioRecorder.cancel();
+      setRecordingState('idle');
+    }
+    setAnalyzeResult(null);
+    
+  }, [selected]);
 
   // --- Auth handlers -----------------------------------------------------------
   const onLogin = async ({ email, password }) => {
@@ -257,9 +268,7 @@ export default function Page() {
     }
   };
 
-  // Reminder.text backend'de "title: description" formatında birleştirilmiş
-  // saklanıyor (bkz. services.py add_reminder). Düzenleme formunu doldurmak
-  // için bunu geri ayırıyoruz.
+
   const onEditReminder = (reminder) => {
     const [title, ...rest] = reminder.text.split(': ');
     setReminderForm({
@@ -329,20 +338,32 @@ export default function Page() {
     }
   };
 
-  // --- Analyze handler -----------------------------------------------------------------
-  const onAnalyze = async () => {
+
+  const onToggleRecording = async () => {
     if (!selectedPet?.id) {
       Alert.alert('Uyarı', 'Önce bir pati seç.');
       return;
     }
+
+    if (recordingState === 'recording') {
+      try {
+        const uri = await audioRecorder.stop();
+        setRecordingState('uploading');
+        const data = await api.analyzeMeow(selectedPet.id, authToken, uri);
+        setAnalyzeResult(data);
+      } catch (e) {
+        showError('Analiz hatası', e);
+      } finally {
+        setRecordingState('idle');
+      }
+      return;
+    }
+
     try {
-      setLoading(true);
-      const data = await api.analyzeMeow(selectedPet.id, authToken);
-      setAnalyzeResult(data);
+      await audioRecorder.start();
+      setRecordingState('recording');
     } catch (e) {
-      showError('Analiz hatası', e);
-    } finally {
-      setLoading(false);
+      showError('Mikrofon hatası', e);
     }
   };
 
@@ -460,8 +481,8 @@ export default function Page() {
           <AnalyzeScreen
             selectedPet={selectedPet}
             result={analyzeResult}
-            onAnalyze={onAnalyze}
-            loading={loading}
+            recordingState={recordingState}
+            onToggleRecording={onToggleRecording}
           />
         )}
       </Tab.Screen>

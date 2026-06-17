@@ -16,9 +16,6 @@ DURATION_SECONDS = 3.0
 N_MELS = 64
 FIXED_LEN = int(SAMPLE_RATE * DURATION_SECONDS)
 
-# Eğitim notebook'undaki ham sınıf etiketlerinden (LabelEncoder sırasıyla
-# alfabetik: Ac, Huzursuz, Sakin) kullanıcıya gösterilecek Türkçe metne
-# ve öneriye eşleme. Notebook'taki LABEL_MAP ile birebir tutarlı olmalı.
 LABEL_DISPLAY = {
     "Ac": {
         "result": "Acıktım, mama ver!",
@@ -55,9 +52,7 @@ def load_model() -> None:
         return
 
     try:
-        # TensorFlow import'u burada (fonksiyon içinde) yapılıyor; bu sayede
-        # model dosyaları yoksa TensorFlow'un ağır import maliyetine hiç
-        # girilmez ve paket kurulu değilse de uygulamanın geri kalanı çalışır.
+
         import tensorflow as tf
 
         _model = tf.keras.models.load_model(str(MODEL_PATH))
@@ -87,6 +82,9 @@ def _extract_melspectrogram(file_bytes: bytes) -> np.ndarray:
     return mel_norm.astype(np.float32)
 
 
+LOW_CONFIDENCE_THRESHOLD = 0.45
+
+
 def predict_from_audio(file_bytes: bytes) -> dict:
     """Ses byte'larından tahmin döner: {"label", "result", "advice", "confidence"}.
     Model yüklenmemişse RuntimeError fırlatır; çağıran taraf (services.py)
@@ -101,6 +99,14 @@ def predict_from_audio(file_bytes: bytes) -> dict:
     best_idx = int(np.argmax(predictions))
     label = _labels[best_idx]
     confidence = float(predictions[best_idx])
+
+    if confidence < LOW_CONFIDENCE_THRESHOLD:
+        return {
+            "label": "Belirsiz",
+            "result": "Net bir miyavlama tespit edemedim.",
+            "advice": "Kaydın net bir kedi sesi içerdiğinden ve ortamın sessiz olduğundan emin olup tekrar dener misin?",
+            "confidence": round(confidence, 4),
+        }
 
     display = LABEL_DISPLAY.get(label, {"result": label, "advice": ""})
     return {
