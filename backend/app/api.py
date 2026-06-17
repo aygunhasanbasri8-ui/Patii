@@ -56,8 +56,8 @@ def delete_pet(
 
 
 @router.post("/analyze/meow")
-def analyze_meow(pet_id: int, token: str = Depends(oauth2_scheme)):
-    return services.analyze_meow(pet_id, token)
+def analyze_meow(pet_id: int, session: Session = Depends(db.get_db), token: str = Depends(oauth2_scheme)):
+    return services.analyze_meow(session, pet_id, token)
 
 
 @router.post("/reminders/add")
@@ -87,6 +87,16 @@ def get_pet_reminder_history(
     return services.get_pet_reminder_history(session, pet_id, token)
 
 
+@router.put("/reminders/{rem_id}")
+def update_reminder(
+    rem_id: int,
+    rem: schemas.ReminderUpdate,
+    session: Session = Depends(db.get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    return services.update_reminder_for_owner(session, rem_id, rem, token)
+
+
 @router.delete("/reminders/{rem_id}")
 def delete_reminder(
     rem_id: int,
@@ -95,3 +105,7 @@ def delete_reminder(
 ):
     return services.remove_reminder(session, rem_id, token)
 
+
+@router.post("/chatbot/ask")
+def ask_chatbot(payload: schemas.ChatAsk, token: str = Depends(oauth2_scheme)):
+    return services.ask_chatbot(payload, token)

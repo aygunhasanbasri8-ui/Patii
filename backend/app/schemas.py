@@ -16,7 +16,6 @@ class PetCreate(BaseModel):
     name: str
     species: str
     breed: str
-    owner_id: int
 
 
 class PetUpdate(BaseModel):
@@ -31,3 +30,13 @@ class ReminderCreate(BaseModel):
     description: str
     remind_at: str
 
+
+class ReminderUpdate(BaseModel):
+    title: str
+    description: str
+    remind_at: str
+
+
+class ChatAsk(BaseModel):
+    question: str
+    pet_id: int | None = None

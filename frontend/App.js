@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'; // Expo ile hazır gelen ikon kütüphanesi
+import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { StyleSheet, Text, View } from 'react-native';

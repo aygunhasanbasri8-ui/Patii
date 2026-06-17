@@ -61,6 +61,14 @@ def get_reminder_by_id(db: Session, reminder_id: int) -> models.Reminder | None:
     return db.query(models.Reminder).filter(models.Reminder.id == reminder_id).first()
 
 
+def update_reminder(db: Session, reminder: models.Reminder, text: str, date: str) -> models.Reminder:
+    reminder.text = text
+    reminder.date = date
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+
 def delete_reminder(db: Session, reminder: models.Reminder) -> None:
     db.delete(reminder)
     db.commit()

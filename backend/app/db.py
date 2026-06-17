@@ -5,9 +5,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'pati.db')}"
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'pati.db')}"
+
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -17,4 +22,3 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-

@@ -1,6 +1,16 @@
 [
+  "test_chatbot.py::TestChatbot::test_ask_chatbot_empty_question",
+  "test_chatbot.py::TestChatbot::test_ask_chatbot_no_auth",
+  "test_chatbot.py::TestChatbot::test_ask_chatbot_success",
+  "test_chatbot.py::TestChatbot::test_ask_chatbot_unknown_topic_returns_default",
+  "test_chatbot.py::TestChatbot::test_ask_chatbot_with_pet_id",
   "test_main.py::TestAnalyzeMeow::test_analyze_meow",
   "test_main.py::TestAnalyzeMeow::test_analyze_meow_no_auth",
+  "test_main.py::TestAnalyzeMeow::test_analyze_meow_pet_not_found",
+  "test_main.py::TestBOLA::test_delete_another_users_pet_returns_403",
+  "test_main.py::TestBOLA::test_get_another_users_pets_returns_403",
+  "test_main.py::TestBOLA::test_update_another_users_pet_returns_403",
+  "test_main.py::TestGlobalExceptionHandler::test_unexpected_exception_returns_500",
   "test_main.py::TestLogin::test_login_nonexistent_user",
   "test_main.py::TestLogin::test_login_success",
   "test_main.py::TestLogin::test_login_wrong_password",
@@ -19,5 +29,9 @@
   "test_main.py::TestReminders::test_delete_reminder_not_found",
   "test_main.py::TestReminders::test_get_pet_reminders",
   "test_main.py::TestReminders::test_reminder_history",
-  "test_main.py::TestReminders::test_reminders_no_auth"
+  "test_main.py::TestReminders::test_reminders_no_auth",
+  "test_main.py::TestReminders::test_update_reminder",
+  "test_main.py::TestReminders::test_update_reminder_forbidden",
+  "test_main.py::TestReminders::test_update_reminder_no_auth",
+  "test_main.py::TestReminders::test_update_reminder_not_found"
 ]
