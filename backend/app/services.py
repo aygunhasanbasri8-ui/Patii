@@ -1,10 +1,13 @@
+import logging
 import random
 from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, repositories, schemas
+from . import core, ml_model, repositories, schemas
+
+logger = logging.getLogger(__name__)
 
 
 def register_user(db: Session, payload: schemas.UserCreate) -> dict:
@@ -81,11 +84,30 @@ def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:
     return {"message": "Pati silindi."}
 
 
-def analyze_meow(db: Session, pet_id: int, token: str) -> dict:
+def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None = None) -> dict:
     core.get_current_user_email(token)
     pet = repositories.get_pet_by_id(db, pet_id)
     if not pet:
         raise HTTPException(status_code=404, detail="Pati bulunamadı!")
+
+    # Gerçek model yüklüyse ve ses dosyası geldiyse onu kullan. Model henüz
+    # yerleştirilmemişse (ml_model.is_model_available() False) veya ses
+    # işlenirken bir hata olursa eski stub davranışına (rastgele öneri)
+    # düşülür — bu, ml_model.py'nin docstring'inde açıklanan "uygulamayı
+    # çökertmeyen kademeli düşüş" stratejisinin services katmanındaki ayağıdır.
+    if audio_bytes and ml_model.is_model_available():
+        try:
+            prediction = ml_model.predict_from_audio(audio_bytes)
+            return {
+                "pet_id": pet_id,
+                "status": "Analiz Tamamlandı",
+                "result": prediction["result"],
+                "advice": prediction["advice"],
+                "confidence": prediction["confidence"],
+                "source": "model",
+            }
+        except Exception as exc:
+            logger.warning("Model çıkarımı başarısız oldu, stub'a düşülüyor: %s", exc)
 
     moods = [
         "Acıktım, mama ver!",
@@ -99,6 +121,7 @@ def analyze_meow(db: Session, pet_id: int, token: str) -> dict:
         "status": "Analiz Tamamlandı",
         "result": random.choice(moods),
         "confidence": 0.95,
+        "source": "stub",
     }
 
 

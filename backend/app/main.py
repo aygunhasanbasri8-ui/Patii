@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .api import router
 from .db import engine
+from .ml_model import load_model
 from .models import Base
 
 logging.basicConfig(level=logging.INFO)
@@ -38,3 +39,7 @@ def startup():
     except Exception as exc:
         logger.error(f"Tablo oluşturma hatası: {exc}")
 
+    # Miyavlama analiz modelini belleğe yükle (varsa). Model dosyaları
+    # henüz yerleştirilmemişse load_model() sessizce stub moduna düşer,
+    # uygulama başlamayı engellemez.
+    load_model()

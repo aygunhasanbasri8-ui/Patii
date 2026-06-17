@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -56,8 +56,14 @@ def delete_pet(
 
 
 @router.post("/analyze/meow")
-def analyze_meow(pet_id: int, session: Session = Depends(db.get_db), token: str = Depends(oauth2_scheme)):
-    return services.analyze_meow(session, pet_id, token)
+async def analyze_meow(
+    pet_id: int,
+    session: Session = Depends(db.get_db),
+    token: str = Depends(oauth2_scheme),
+    audio: UploadFile | None = File(default=None),
+):
+    audio_bytes = await audio.read() if audio is not None else None
+    return services.analyze_meow(session, pet_id, token, audio_bytes)
 
 
 @router.post("/reminders/add")
