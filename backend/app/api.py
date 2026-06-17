@@ -113,5 +113,9 @@ def delete_reminder(
 
 
 @router.post("/chatbot/ask")
-def ask_chatbot(payload: schemas.ChatAsk, token: str = Depends(oauth2_scheme)):
-    return services.ask_chatbot(payload, token)
+def ask_chatbot(
+    payload: schemas.ChatAsk,
+    session: Session = Depends(db.get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    return services.ask_chatbot(session, payload, token)

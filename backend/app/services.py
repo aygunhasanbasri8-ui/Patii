@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, ml_model, repositories, schemas
+from . import core, llm, ml_model, repositories, schemas
 
 logger = logging.getLogger(__name__)
 
@@ -84,25 +84,43 @@ def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:
     return {"message": "Pati silindi."}
 
 
+def _contextual_uncertain_advice(db: Session, pet) -> str | None:
+
+    reminders = repositories.get_reminders_by_pet(db, pet.id)
+    recent_reminder_text = reminders[-1].text if reminders else "kayıtlı bir hatırlatıcı yok"
+
+    prompt = (
+        f"{_SYSTEM_PROMPT_PREFIX}"
+        f"Bir miyavlama ses analizi net bir sonuç vermedi (belirsiz/düşük güven).\n"
+        f"Pati: {pet.name}, tür: {pet.species}, ırk: {pet.breed}.\n"
+        f"Son hatırlatıcı: {recent_reminder_text}.\n"
+        f"Kullanıcıya, net bir teşhis olmadığını nazikçe belirten ve mevcut "
+        f"bağlama göre 1 kısa pratik öneri içeren bir mesaj yaz."
+    )
+    return llm.generate_text(prompt, max_output_tokens=150)
+
+
 def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None = None) -> dict:
     core.get_current_user_email(token)
     pet = repositories.get_pet_by_id(db, pet_id)
     if not pet:
         raise HTTPException(status_code=404, detail="Pati bulunamadı!")
 
-    # Gerçek model yüklüyse ve ses dosyası geldiyse onu kullan. Model henüz
-    # yerleştirilmemişse (ml_model.is_model_available() False) veya ses
-    # işlenirken bir hata olursa eski stub davranışına (rastgele öneri)
-    # düşülür — bu, ml_model.py'nin docstring'inde açıklanan "uygulamayı
-    # çökertmeyen kademeli düşüş" stratejisinin services katmanındaki ayağıdır.
     if audio_bytes and ml_model.is_model_available():
         try:
             prediction = ml_model.predict_from_audio(audio_bytes)
+            advice = prediction["advice"]
+
+            if prediction["label"] == "Belirsiz":
+                contextual_advice = _contextual_uncertain_advice(db, pet)
+                if contextual_advice:
+                    advice = contextual_advice
+
             return {
                 "pet_id": pet_id,
                 "status": "Analiz Tamamlandı",
                 "result": prediction["result"],
-                "advice": prediction["advice"],
+                "advice": advice,
                 "confidence": prediction["confidence"],
                 "source": "model",
             }
@@ -187,14 +205,6 @@ def remove_reminder(db: Session, rem_id: int, token: str) -> dict:
     return {"message": "Hatırlatıcı silindi."}
 
 
-# --- Chatbot (AI Bakım Asistanı) ----------------------------------------
-#
-# Şimdilik gerçek bir LLM'e bağlanmıyor; basit anahtar kelime eşleştirmesi
-# yapan kural tabanlı bir stub'tır (analyze_meow'daki random.choice yaklaşımına
-# paralel). İleride bu fonksiyonun içi bir LLM çağrısıyla (örn. Gemini/OpenAI)
-# değiştirilecek; dışarıya açılan sözleşme (ChatAsk -> {"answer": str}) aynı
-# kalacağı için frontend'de değişiklik gerekmeyecektir.
-
 _KEYWORD_RESPONSES: list[tuple[tuple[str, ...], str]] = [
     (("tüy", "tuy"), "Tüy dökülmesi mevsimsel olabilir; düzenli fırçalama ve omega-3 takviyesi yardımcı olur. Sürekli ve aşırıysa veterinerine danış."),
     (("aşı", "asi", "vaccine"), "Aşı takvimini Hatırlatıcılar sekmesinden takip edebilirsin. Genel kural: yavru hayvanlarda 6-8 haftadan başlanır, yetişkinlerde yıllık tekrar gerekir."),
@@ -214,19 +224,39 @@ _DEFAULT_ANSWER = (
     "adım her zaman bir veterinere ulaşmaktır."
 )
 
+_SYSTEM_PROMPT_PREFIX = (
+    "Sen Pati uygulamasının evcil hayvan bakım asistanısın. Türkçe, kısa "
+    "(en fazla 3-4 cümle), sıcak ve pratik bir dille cevap ver. Tıbbi "
+    "tavsiye değil, genel bakım önerisi sunduğunu unutma; ciddi/acil "
+    "belirtilerde veterinere yönlendir.\n\n"
+)
 
-def ask_chatbot(payload: schemas.ChatAsk, token: str) -> dict:
+
+def _keyword_fallback_answer(question: str) -> str:
+    normalized = question.lower()
+    for keywords, response in _KEYWORD_RESPONSES:
+        if any(keyword in normalized for keyword in keywords):
+            return response
+    return _DEFAULT_ANSWER
+
+
+def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
     core.get_current_user_email(token)
 
     question = (payload.question or "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="Soru boş olamaz!")
 
-    normalized = question.lower()
-    answer = _DEFAULT_ANSWER
-    for keywords, response in _KEYWORD_RESPONSES:
-        if any(keyword in normalized for keyword in keywords):
-            answer = response
-            break
+    pet_context = ""
+    if payload.pet_id is not None:
+        pet = repositories.get_pet_by_id(db, payload.pet_id)
+        if pet:
+            pet_context = f"Kullanıcının patisi: {pet.name}, tür: {pet.species}, ırk: {pet.breed}.\n"
+
+    prompt = f"{_SYSTEM_PROMPT_PREFIX}{pet_context}Kullanıcının sorusu: {question}"
+    answer = llm.generate_text(prompt)
+
+    if answer is None:
+        answer = _keyword_fallback_answer(question)
 
     return {"answer": answer}
