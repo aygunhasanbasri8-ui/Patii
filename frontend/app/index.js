@@ -72,7 +72,7 @@ export default function Page() {
         if (restored) {
           await fetchPets(restored.token, restored.userId);
         }
-      } catch (e) {
+      } catch (_e) {
         showError('Başlangıç hatası', new Error('Başlangıç verileri yüklenemedi.'));
       } finally {
         setBootLoading(false);
