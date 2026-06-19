@@ -15,8 +15,23 @@ def create_user(db: Session, full_name: str, email: str, hashed_password: str) -
     return user
 
 
-def create_pet(db: Session, name: str, species: str, breed: str, owner_id: int) -> models.Pet:
-    pet = models.Pet(name=name, species=species, breed=breed, owner_id=owner_id)
+def create_pet(
+    db: Session,
+    name: str,
+    species: str,
+    breed: str,
+    owner_id: int,
+    avatar_type: str | None = None,
+    avatar_value: str | None = None,
+) -> models.Pet:
+    pet = models.Pet(
+        name=name,
+        species=species,
+        breed=breed,
+        owner_id=owner_id,
+        avatar_type=avatar_type,
+        avatar_value=avatar_value,
+    )
     db.add(pet)
     db.commit()
     db.refresh(pet)
@@ -31,10 +46,30 @@ def get_pet_by_id(db: Session, pet_id: int) -> models.Pet | None:
     return db.query(models.Pet).filter(models.Pet.id == pet_id).first()
 
 
-def update_pet(db: Session, pet: models.Pet, name: str, species: str, breed: str) -> models.Pet:
+def update_pet(
+    db: Session,
+    pet: models.Pet,
+    name: str,
+    species: str,
+    breed: str,
+    avatar_type: str | None = None,
+    avatar_value: str | None = None,
+) -> models.Pet:
     pet.name = name
     pet.species = species
     pet.breed = breed
+    pet.avatar_type = avatar_type
+    pet.avatar_value = avatar_value
+    db.commit()
+    db.refresh(pet)
+    return pet
+
+
+def update_pet_avatar(
+    db: Session, pet: models.Pet, avatar_type: str, avatar_value: str
+) -> models.Pet:
+    pet.avatar_type = avatar_type
+    pet.avatar_value = avatar_value
     db.commit()
     db.refresh(pet)
     return pet
@@ -72,4 +107,3 @@ def update_reminder(db: Session, reminder: models.Reminder, text: str, date: str
 def delete_reminder(db: Session, reminder: models.Reminder) -> None:
     db.delete(reminder)
     db.commit()
-

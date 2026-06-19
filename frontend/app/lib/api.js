@@ -1,4 +1,4 @@
-export const BACKEND_BASE_URL = 'http://10.146.168.212:8000';
+export const BACKEND_BASE_URL = 'http://192.168.1.4:8000';
 const DEFAULT_TIMEOUT_MS = 10000;
 
 export class ApiError extends Error {
@@ -74,6 +74,13 @@ export const updatePet = (petId, payload, token) =>
 
 export const deletePet = (petId, token) =>
   requestApi(`/api/pets/${petId}`, { method: 'DELETE' }, token);
+
+export const uploadPetAvatar = (petId, imageUri, token) => {
+  const ext = (imageUri.split('.').pop() || 'jpg').split('?')[0];
+  const formData = new FormData();
+  formData.append('file', { uri: imageUri, name: `avatar.${ext}`, type: `image/${ext}` });
+  return requestApi(`/api/pets/${petId}/avatar`, { method: 'POST', body: formData }, token);
+};
 
 export const analyzeMeow = (petId, token, audioUri = null) => {
   if (!audioUri) {

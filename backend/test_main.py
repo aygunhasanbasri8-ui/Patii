@@ -68,7 +68,59 @@ class TestPets:
             "owner_id": user_id
         }, headers={"Authorization": f"Bearer {auth_token}"})
         assert response.status_code == 200
-        assert "Boncuk" in response.json()["message"]
+        data = response.json()
+        assert "Boncuk" in data["message"]
+        assert "pet_id" in data  # avatar özelliğiyle pet_id dönmeli
+
+    def test_add_pet_with_icon_avatar(self, client, registered_user, auth_token):
+        response = client.post("/api/pets/add", json={
+            "name": "Minnak",
+            "species": "Kedi",
+            "breed": "British",
+            "avatar_type": "icon",
+            "avatar_value": "🐱",
+        }, headers={"Authorization": f"Bearer {auth_token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert "pet_id" in data
+
+        # Patiyi getirince avatar alanları dönmeli
+        login_resp = client.post("/api/auth/login", json={
+            "email": registered_user["email"],
+            "password": registered_user["password"]
+        })
+        user_id = login_resp.json()["user_id"]
+        pets = client.get(
+            f"/api/pets/my-pets/{user_id}",
+            headers={"Authorization": f"Bearer {auth_token}"},
+        ).json()
+        assert pets[0]["avatar_type"] == "icon"
+        assert pets[0]["avatar_value"] == "🐱"
+
+    def test_upload_pet_avatar_photo(self, client, registered_user, auth_token):
+        login_resp = client.post("/api/auth/login", json={
+            "email": registered_user["email"],
+            "password": registered_user["password"]
+        })
+        user_id = login_resp.json()["user_id"]
+
+        add_resp = client.post("/api/pets/add", json={
+            "name": "Pamuk",
+            "species": "Kedi",
+            "breed": "Van",
+        }, headers={"Authorization": f"Bearer {auth_token}"})
+        pet_id = add_resp.json()["pet_id"]
+
+        fake_image = b"\x89PNG\r\n\x1a\n" + b"\x00" * 50  # fake PNG header
+        resp = client.post(
+            f"/api/pets/{pet_id}/avatar",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            files={"file": ("avatar.png", fake_image, "image/png")},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["avatar_type"] == "photo"
+        assert data["avatar_value"].startswith("/static/uploads/")
 
     def test_add_pet_no_auth(self, client):
         response = client.post("/api/pets/add", json={

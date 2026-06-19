@@ -43,3 +43,24 @@ app-example
 # generated native folders
 /ios
 /android
+
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+

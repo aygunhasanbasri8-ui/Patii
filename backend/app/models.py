@@ -21,6 +21,8 @@ class Pet(Base):
     species = Column(String)
     breed = Column(String)
     owner_id = Column(Integer, ForeignKey("users.id"))
+    avatar_type = Column(String, nullable=True)   # "icon" | "photo" | None
+    avatar_value = Column(String, nullable=True)  # emoji string or "/static/uploads/..."
 
     owner = relationship("User", back_populates="pets")
     reminders = relationship("Reminder", back_populates="pet")

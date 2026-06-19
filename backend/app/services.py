@@ -1,11 +1,16 @@
 import logging
+import os
 import random
+import time
 from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from . import core, llm, ml_model, repositories, schemas
+
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_UPLOADS_DIR = os.path.join(_APP_DIR, "..", "static", "uploads")
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +56,10 @@ def add_pet_for_owner(db: Session, payload: schemas.PetCreate, token: str) -> di
         species=payload.species,
         breed=payload.breed,
         owner_id=user.id,
+        avatar_type=payload.avatar_type,
+        avatar_value=payload.avatar_value,
     )
-    return {"message": f"{pet.name} güvenli şekilde eklendi!", "owner": user.email}
+    return {"message": f"{pet.name} güvenli şekilde eklendi!", "owner": user.email, "pet_id": pet.id}
 
 
 def get_owner_pets(db: Session, owner_id: int, token: str):
@@ -69,8 +76,38 @@ def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, t
         raise HTTPException(status_code=404, detail="Pati bulunamadı!")
     if pet.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
-    repositories.update_pet(db, pet, payload.name, payload.species, payload.breed)
+    repositories.update_pet(
+        db, pet,
+        payload.name,
+        payload.species,
+        payload.breed,
+        avatar_type=payload.avatar_type,
+        avatar_value=payload.avatar_value,
+    )
     return {"message": "Pati bilgileri güncellendi.", "pet_id": pet.id}
+
+
+def upload_pet_avatar(
+    db: Session, pet_id: int, token: str, file_bytes: bytes, filename: str
+) -> dict:
+    user = _get_user_from_token(db, token)
+    pet = repositories.get_pet_by_id(db, pet_id)
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
+    if pet.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
+
+    os.makedirs(_UPLOADS_DIR, exist_ok=True)
+    ext = os.path.splitext(filename)[1].lower() or ".jpg"
+    safe_name = f"pet_{pet_id}_{int(time.time())}{ext}"
+    filepath = os.path.join(_UPLOADS_DIR, safe_name)
+
+    with open(filepath, "wb") as f:
+        f.write(file_bytes)
+
+    avatar_value = f"/static/uploads/{safe_name}"
+    repositories.update_pet_avatar(db, pet, "photo", avatar_value)
+    return {"avatar_type": "photo", "avatar_value": avatar_value}
 
 
 def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:

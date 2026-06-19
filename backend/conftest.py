@@ -1,10 +1,15 @@
+import os
+
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
-from app.models import Base
-from app.db import get_db
-from main import app
+
+os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret-not-for-production")
+
+from app.db import get_db  # noqa: E402 — env var set edilmeden önce import olmamalı
+from app.models import Base  # noqa: E402
+from main import app  # noqa: E402
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
 

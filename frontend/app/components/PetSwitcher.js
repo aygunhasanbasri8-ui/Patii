@@ -34,9 +34,11 @@ export default function PetSwitcher({ pets, selectedIndex, onSelect, onAddPress 
           </TouchableOpacity>
         );
       })}
-      <TouchableOpacity style={styles.addChip} onPress={onAddPress} activeOpacity={0.8}>
-        <Ionicons name="add" size={18} color={colors.primaryDark} />
-      </TouchableOpacity>
+      {onAddPress ? (
+        <TouchableOpacity style={styles.addChip} onPress={onAddPress} activeOpacity={0.8}>
+          <Ionicons name="add" size={18} color={colors.primaryDark} />
+        </TouchableOpacity>
+      ) : null}
     </ScrollView>
   );
 }

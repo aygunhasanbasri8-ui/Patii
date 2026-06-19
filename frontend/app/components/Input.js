@@ -10,7 +10,9 @@ export default function Input({
   secureTextEntry,
   autoCapitalize = 'sentences',
   keyboardType,
+  returnKeyType,
   multiline = false,
+  editable = true,
   style,
 }) {
   const [focused, setFocused] = useState(false);
@@ -21,6 +23,7 @@ export default function Input({
         style={[
           styles.input,
           focused && styles.inputFocused,
+          !editable && styles.inputDisabled,
           multiline && styles.multiline,
         ]}
         value={value}
@@ -30,7 +33,9 @@ export default function Input({
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
+        returnKeyType={returnKeyType}
         multiline={multiline}
+        editable={editable}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
       />
@@ -61,6 +66,11 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: colors.primary,
+    backgroundColor: colors.primaryXLight,
+  },
+  inputDisabled: {
+    backgroundColor: colors.surfaceMuted,
+    color: colors.textMuted,
   },
   multiline: {
     minHeight: 90,

@@ -55,6 +55,18 @@ def delete_pet(
     return services.remove_pet_for_owner(session, pet_id, token)
 
 
+@router.post("/pets/{pet_id}/avatar")
+async def upload_pet_avatar(
+    pet_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(db.get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    file_bytes = await file.read()
+    filename = file.filename or "photo.jpg"
+    return services.upload_pet_avatar(session, pet_id, token, file_bytes, filename)
+
+
 @router.post("/analyze/meow")
 async def analyze_meow(
     pet_id: int,

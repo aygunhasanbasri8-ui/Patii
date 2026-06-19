@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AvatarDisplay from '../components/AvatarDisplay';
 import { EmptyState, SectionHeader } from '../components/UI';
 import PawMark from '../components/PawMark';
-import PetSwitcher from '../components/PetSwitcher';
 import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
 
 function StatPill({ icon, label, value, tone = 'primary' }) {
   return (
     <View style={[styles.statPill, toneBg[tone]]}>
       <View style={[styles.statIconWrap, toneIconBg[tone]]}>
-        <Ionicons name={icon} size={18} color={toneIconColor[tone]} />
+        <Ionicons name={icon} size={18} color="#fff" />
       </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -27,14 +27,12 @@ const toneIconBg = {
   info: { backgroundColor: colors.info },
   success: { backgroundColor: colors.success },
 };
-const toneIconColor = { primary: '#fff', info: '#fff', success: '#fff' };
 
 export default function HomeScreen({
   userName,
   pets,
   selectedIndex,
   onSelectPet,
-  onAddPetPress,
   selectedPet,
   upcomingReminders,
   refreshing,
@@ -57,7 +55,35 @@ export default function HomeScreen({
 
       {pets.length > 0 ? (
         <>
-          <PetSwitcher pets={pets} selectedIndex={selectedIndex} onSelect={onSelectPet} onAddPress={onAddPetPress} />
+          {/* Büyük pati kartları — yatay kaydırmalı, "+" yok */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.petCardsRow}
+          >
+            {pets.map((pet, i) => (
+              <TouchableOpacity
+                key={`${pet.id ?? 'new'}-${i}`}
+                style={[styles.petCard, i === selectedIndex && styles.petCardActive]}
+                onPress={() => onSelectPet(i)}
+                activeOpacity={0.85}
+              >
+                <AvatarDisplay
+                  avatarType={pet.avatar_type}
+                  avatarValue={pet.avatar_value}
+                  petName={pet.name}
+                  size={100}
+                  style={i === selectedIndex ? styles.avatarActive : undefined}
+                />
+                <Text
+                  style={[styles.petCardName, i === selectedIndex && styles.petCardNameActive]}
+                  numberOfLines={1}
+                >
+                  {pet.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
           {selectedPet ? (
             <View style={styles.petHero}>
@@ -72,7 +98,6 @@ export default function HomeScreen({
           <View style={styles.statsRow}>
             <StatPill icon="paw" label="Toplam Pati" value={pets.length} tone="primary" />
             <StatPill icon="notifications" label="Yaklaşan" value={upcomingReminders.length} tone="info" />
-            <StatPill icon="checkmark-done" label="Aktif" value={pets.length > 0 ? 'Evet' : 'Hayır'} tone="success" />
           </View>
 
           <SectionHeader title="Yaklaşan Hatırlatıcılar" />
@@ -111,6 +136,37 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg },
   greeting: { ...typography.title, color: colors.textPrimary },
   subGreeting: { ...typography.body, color: colors.textSecondary, marginTop: 2 },
+
+  petCardsRow: { paddingVertical: spacing.sm, gap: spacing.sm },
+  petCard: {
+    width: 150,
+    height: 150,
+    alignItems: 'center',
+    JustifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...shadow.subtle,
+  },
+  petCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryXLight,
+  },
+  avatarActive: {
+    borderColor: colors.primary,
+    borderWidth: 3,
+  },
+  petCardName: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  petCardNameActive: { color: colors.primaryDark, fontWeight: '700' },
+
   petHero: { marginTop: spacing.lg },
   petHeroName: { ...typography.display, color: colors.textPrimary },
   petHeroMeta: { ...typography.body, color: colors.textSecondary, marginTop: 2 },

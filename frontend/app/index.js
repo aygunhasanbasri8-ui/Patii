@@ -17,7 +17,7 @@ import AnalyzeScreen from './screens/AnalyzeScreen';
 import ChatScreen from './screens/ChatScreen';
 
 const Tab = createBottomTabNavigator();
-const EMPTY_DRAFT_PET = { name: '', species: '', breed: '' };
+const EMPTY_DRAFT_PET = { name: '', species: '', breed: '', avatar_type: null, avatar_value: null };
 
 function showError(prefix, error) {
   const message = error instanceof ApiError ? error.message : error?.message || 'Bilinmeyen bir hata oluştu.';
@@ -102,8 +102,11 @@ export default function Page() {
       name: selectedPet?.name || '',
       species: selectedPet?.species || '',
       breed: selectedPet?.breed || '',
+      avatar_type: selectedPet?.avatar_type || null,
+      avatar_value: selectedPet?.avatar_value || null,
     });
-  }, [selected, selectedPet?.name, selectedPet?.species, selectedPet?.breed]);
+  }, [selected, selectedPet?.name, selectedPet?.species, selectedPet?.breed,
+      selectedPet?.avatar_type, selectedPet?.avatar_value]);
 
 
   useEffect(() => {
@@ -193,12 +196,42 @@ export default function Page() {
       Alert.alert('Eksik alan', 'Ad, tür ve cins zorunludur.');
       return;
     }
+
+    // Fotoğraf yerel URI ise ayrıca yüklenmesi gerekir
+    const isLocalPhoto =
+      draftPet.avatar_type === 'photo' &&
+      draftPet.avatar_value &&
+      !draftPet.avatar_value.startsWith('/static/');
+
     try {
       setLoading(true);
       if (selectedPet?.id) {
-        await api.updatePet(selectedPet.id, { name, species, breed }, authToken);
+        // Düzenleme: ikon doğrudan payload'a, fotoğraf ayrı endpoint'e
+        await api.updatePet(
+          selectedPet.id,
+          {
+            name, species, breed,
+            avatar_type: isLocalPhoto ? selectedPet.avatar_type : draftPet.avatar_type,
+            avatar_value: isLocalPhoto ? selectedPet.avatar_value : draftPet.avatar_value,
+          },
+          authToken
+        );
+        if (isLocalPhoto) {
+          await api.uploadPetAvatar(selectedPet.id, draftPet.avatar_value, authToken);
+        }
       } else {
-        await api.addPet({ name, species, breed }, authToken);
+        // Yeni pati: ikon payload'a, fotoğraf sonradan yükle
+        const resp = await api.addPet(
+          {
+            name, species, breed,
+            avatar_type: isLocalPhoto ? null : draftPet.avatar_type,
+            avatar_value: isLocalPhoto ? null : draftPet.avatar_value,
+          },
+          authToken
+        );
+        if (isLocalPhoto && resp?.pet_id) {
+          await api.uploadPetAvatar(resp.pet_id, draftPet.avatar_value, authToken);
+        }
       }
       await fetchPets();
       Alert.alert('Başarılı', `${name} kaydedildi.`);
@@ -429,7 +462,6 @@ export default function Page() {
             pets={pets}
             selectedIndex={selected}
             onSelectPet={setSelected}
-            onAddPetPress={onAddDraftPet}
             selectedPet={selectedPet}
             upcomingReminders={upcomingReminders}
             refreshing={refreshing}

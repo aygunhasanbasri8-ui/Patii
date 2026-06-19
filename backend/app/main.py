@@ -1,8 +1,10 @@
 import logging
+import os
 import traceback
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api import router
 from .db import engine
@@ -12,7 +14,11 @@ from .models import Base
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+os.makedirs(os.path.join(_STATIC_DIR, "uploads"), exist_ok=True)
+
 app = FastAPI()
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 app.include_router(router)
 
 

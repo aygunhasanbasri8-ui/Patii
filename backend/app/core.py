@@ -1,10 +1,27 @@
+import logging
+import os
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-SECRET_KEY = "VENUSDENEMESECRET"
+logger = logging.getLogger(__name__)
+
+# PRODUCTION: JWT_SECRET_KEY ortam değişkenini güçlü rastgele bir değerle set et.
+# Üretmek için: python -c "import secrets; print(secrets.token_hex(32))"
+# Aşağıdaki fallback YALNIZCA geliştirme ortamı içindir, production'da KESİNLİKLE kullanma.
+_jwt_secret = os.getenv("JWT_SECRET_KEY")
+if _jwt_secret:
+    SECRET_KEY = _jwt_secret
+else:
+    SECRET_KEY = "DEV_ONLY_WEAK_SECRET_DO_NOT_USE_IN_PRODUCTION"
+    logger.warning(
+        "JWT_SECRET_KEY ortam değişkeni tanımlı değil! "
+        "Geliştirme için zayıf bir anahtar kullanılıyor. "
+        "Production'da JWT_SECRET_KEY mutlaka ayarlanmalıdır."
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 

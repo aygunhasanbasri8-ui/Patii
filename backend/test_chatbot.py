@@ -11,7 +11,6 @@ class TestChatbot:
         assert len(data["answer"]) > 0
 
     def test_ask_chatbot_with_existing_pet_id(self, client, registered_user, auth_token):
-       
         login_resp = client.post("/api/auth/login", json={
             "email": registered_user["email"],
             "password": registered_user["password"]
@@ -34,7 +33,6 @@ class TestChatbot:
         assert "answer" in response.json()
 
     def test_ask_chatbot_with_nonexistent_pet_id(self, client, auth_token):
-
         response = client.post(
             "/api/chatbot/ask",
             json={"question": "Aşı zamanı geldi mi?", "pet_id": 9999},
@@ -58,8 +56,9 @@ class TestChatbot:
             headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert response.status_code == 200
-        assert "veterinere" in response.json()["answer"].lower()
+        assert "veteriner" in response.json()["answer"].lower()
 
     def test_ask_chatbot_no_auth(self, client):
+        response = client.post("/api/chatbot/ask", json={"question": "merhaba"})
         response = client.post("/api/chatbot/ask", json={"question": "merhaba"})
         assert response.status_code == 401

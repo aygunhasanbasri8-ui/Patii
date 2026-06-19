@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { useRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { EmptyState } from '../components/UI';
@@ -22,9 +23,14 @@ function MessageBubble({ message }) {
 
 export default function ChatScreen({ messages, prompt, setPrompt, onSend, loading }) {
   const scrollRef = useRef(null);
+  const headerHeight = useHeaderHeight();
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={headerHeight}
+    >
       <View style={styles.header}>
         <View style={styles.botAvatarLarge}>
           <Ionicons name="paw" size={18} color={colors.textOnPrimary} />
