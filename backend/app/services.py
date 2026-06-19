@@ -85,7 +85,10 @@ def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:
 
 
 def _contextual_uncertain_advice(db: Session, pet) -> str | None:
-
+    """ML modeli 'Belirsiz' sonucu döndürdüğünde, pati ve son hatırlatıcı
+    bağlamını LLM'e vererek daha faydalı bir öneri üretmeyi dener.
+    LLM kullanılamıyorsa None döner, çağıran taraf modelin kendi varsayılan
+    advice metnini kullanmaya devam eder."""
     reminders = repositories.get_reminders_by_pet(db, pet.id)
     recent_reminder_text = reminders[-1].text if reminders else "kayıtlı bir hatırlatıcı yok"
 
@@ -106,6 +109,12 @@ def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None
     if not pet:
         raise HTTPException(status_code=404, detail="Pati bulunamadı!")
 
+
+    logger.info(
+        "analyze_meow çağrıldı — audio_bytes: %s bayt, model_available: %s",
+        len(audio_bytes) if audio_bytes else "None/boş",
+        ml_model.is_model_available(),
+    )
     if audio_bytes and ml_model.is_model_available():
         try:
             prediction = ml_model.predict_from_audio(audio_bytes)
@@ -122,6 +131,7 @@ def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None
                 "result": prediction["result"],
                 "advice": advice,
                 "confidence": prediction["confidence"],
+                "probabilities": prediction.get("probabilities"),
                 "source": "model",
             }
         except Exception as exc:
@@ -247,6 +257,7 @@ def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
     if not question:
         raise HTTPException(status_code=400, detail="Soru boş olamaz!")
 
+
     pet_context = ""
     if payload.pet_id is not None:
         pet = repositories.get_pet_by_id(db, payload.pet_id)
@@ -257,6 +268,7 @@ def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
     answer = llm.generate_text(prompt)
 
     if answer is None:
+
         answer = _keyword_fallback_answer(question)
 
     return {"answer": answer}

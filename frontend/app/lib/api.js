@@ -1,4 +1,4 @@
-export const BACKEND_BASE_URL = 'http://192.168.1.4:8000';
+export const BACKEND_BASE_URL = 'http://10.146.168.212:8000';
 const DEFAULT_TIMEOUT_MS = 10000;
 
 export class ApiError extends Error {
@@ -27,6 +27,7 @@ async function requestApi(path, options = {}, authToken = '', timeoutMs = DEFAUL
       ...options,
     });
   } catch (e) {
+    console.log('[requestApi] gerçek hata:', e?.name, e?.message, e);
     if (e.name === 'AbortError') {
       throw new ApiError('İstek zaman aşımına uğradı. Bağlantını kontrol edip tekrar dene.', { kind: 'timeout' });
     }

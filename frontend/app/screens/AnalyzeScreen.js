@@ -4,7 +4,34 @@ import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TouchableOpa
 import { Badge } from '../components/UI';
 import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
 
-// recordingState: 'idle' | 'recording' | 'uploading'
+const LABEL_NAMES = {
+  Ac: 'Aç',
+  Huzursuz: 'Huzursuz',
+  Sakin: 'Sakin/Mutlu',
+  Belirsiz: 'Belirsiz',
+  KediDegil: 'Kedi Sesi Değil',
+};
+
+function ProbabilityBars({ probabilities }) {
+  if (!probabilities) return null;
+  const entries = Object.entries(probabilities).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <View style={styles.probWrap}>
+      <Text style={styles.probTitle}>Olasılık Dağılımı</Text>
+      {entries.map(([label, value]) => (
+        <View key={label} style={styles.probRow}>
+          <Text style={styles.probLabel}>{LABEL_NAMES[label] || label}</Text>
+          <View style={styles.probTrack}>
+            <View style={[styles.probFill, { width: `${Math.round(value * 100)}%` }]} />
+          </View>
+          <Text style={styles.probValue}>%{Math.round(value * 100)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function AnalyzeScreen({ selectedPet, result, recordingState, onToggleRecording }) {
   const pulse = useRef(new Animated.Value(1)).current;
   const isRecording = recordingState === 'recording';
@@ -74,6 +101,7 @@ export default function AnalyzeScreen({ selectedPet, result, recordingState, onT
             </View>
             <Text style={styles.confidenceLabel}>%{Math.round((result.confidence || 0) * 100)} güven</Text>
           </View>
+          <ProbabilityBars probabilities={result.probabilities} />
         </View>
       ) : (
         <View style={styles.placeholderCard}>
@@ -130,6 +158,13 @@ const styles = StyleSheet.create({
   confidenceTrack: { flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: colors.surfaceSoft, overflow: 'hidden' },
   confidenceFill: { height: '100%', backgroundColor: colors.success, borderRadius: radius.pill },
   confidenceLabel: { ...typography.caption, color: colors.textSecondary },
+  probWrap: { marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.surfaceSoft },
+  probTitle: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.sm, textTransform: 'uppercase' },
+  probRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs, gap: spacing.sm },
+  probLabel: { ...typography.caption, color: colors.textPrimary, width: 80 },
+  probTrack: { flex: 1, height: 6, borderRadius: radius.pill, backgroundColor: colors.surfaceSoft, overflow: 'hidden' },
+  probFill: { height: '100%', backgroundColor: colors.primary, borderRadius: radius.pill },
+  probValue: { ...typography.caption, color: colors.textSecondary, width: 36, textAlign: 'right' },
   placeholderCard: { alignItems: 'center', padding: spacing.xl },
   placeholderText: { ...typography.body, color: colors.textSecondary, marginTop: spacing.sm },
 });
