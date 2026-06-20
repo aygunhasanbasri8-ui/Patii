@@ -1,9 +1,6 @@
-# Bu dosya YALNIZCA geliştirme ortamı içindir.
-# docker compose up çalıştırıldığında Docker Compose bunu otomatik yükler.
-# Production'da: docker compose -f docker-compose.yml up
 services:
   backend:
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["./entrypoint.dev.sh"]
     volumes:
       - ./backend:/app
       - pati_uploads:/app/static/uploads
