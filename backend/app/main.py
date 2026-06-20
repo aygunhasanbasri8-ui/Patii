@@ -3,6 +3,7 @@ import os
 import traceback
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -18,6 +19,19 @@ _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 os.makedirs(os.path.join(_STATIC_DIR, "uploads"), exist_ok=True)
 
 app = FastAPI()
+
+# PRODUCTION'DA "*" yerine spesifik domain listesi kullan (ALLOWED_ORIGINS env var).
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+_origins = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 app.include_router(router)
 

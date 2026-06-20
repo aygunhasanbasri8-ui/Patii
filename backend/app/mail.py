@@ -1,36 +1,33 @@
 import logging
 import os
-
-import httpx
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
 
-_BREVO_URL = "https://api.brevo.com/v3/smtp/email"
-_SENDER_EMAIL = "noreply@pati.app"
 _SENDER_NAME = "Pati"
 
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    api_key = os.getenv("BREVO_API_KEY")
-    if not api_key:
-        logger.warning("BREVO_API_KEY tanımlı değil. E-posta gönderilmedi: %s", to_email)
+    gmail_address = os.getenv("GMAIL_ADDRESS")
+    gmail_password = os.getenv("GMAIL_APP_PASSWORD")
+
+    if not gmail_address or not gmail_password:
+        logger.warning("GMAIL_ADDRESS veya GMAIL_APP_PASSWORD tanımlı değil. E-posta gönderilmedi: %s", to_email)
         return False
 
-    payload = {
-        "sender": {"name": _SENDER_NAME, "email": _SENDER_EMAIL},
-        "to": [{"email": to_email}],
-        "subject": subject,
-        "htmlContent": html_content,
-    }
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{_SENDER_NAME} <{gmail_address}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_content, "html", "utf-8"))
 
     try:
-        resp = httpx.post(
-            _BREVO_URL,
-            json=payload,
-            headers={"api-key": api_key, "Content-Type": "application/json"},
-            timeout=10.0,
-        )
-        resp.raise_for_status()
+        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+            smtp.starttls()
+            smtp.login(gmail_address, gmail_password)
+            smtp.sendmail(gmail_address, to_email, msg.as_bytes())
         logger.info("E-posta gönderildi: %s", to_email)
         return True
     except Exception as exc:

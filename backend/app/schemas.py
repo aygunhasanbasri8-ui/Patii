@@ -7,13 +7,11 @@ class UserCreate(BaseModel):
     full_name: str
     email: str
     password: str
-    turnstile_token: Optional[str] = None
 
 
 class UserLogin(BaseModel):
     email: str
     password: str
-    turnstile_token: Optional[str] = None
 
 
 class VerifyEmail(BaseModel):

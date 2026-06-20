@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, llm, mail, ml_model, repositories, schemas, turnstile
+from . import core, llm, mail, ml_model, repositories, schemas
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _UPLOADS_DIR = os.path.join(_APP_DIR, "..", "static", "uploads")
@@ -19,8 +19,6 @@ _RESET_CODE_EXPIRE_MINUTES = 15
 
 
 def register_user(db: Session, payload: schemas.UserCreate) -> dict:
-    turnstile.verify(payload.turnstile_token)
-
     db_user = repositories.get_user_by_email(db, payload.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı!")
@@ -92,8 +90,6 @@ def resend_verification_code(db: Session, payload: schemas.ResendVerification) -
 
 
 def login_user(db: Session, payload: schemas.UserLogin) -> dict:
-    turnstile.verify(payload.turnstile_token)
-
     user = repositories.get_user_by_email(db, payload.email)
     if not user or not core.verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")

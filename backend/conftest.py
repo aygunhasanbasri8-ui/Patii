@@ -29,11 +29,6 @@ def mock_send_email(monkeypatch):
     monkeypatch.setattr("app.mail.send_email", lambda *a, **kw: True)
 
 
-@pytest.fixture(autouse=True)
-def bypass_turnstile(monkeypatch):
-    monkeypatch.setattr("app.turnstile.verify", lambda token: None)
-
-
 @pytest.fixture
 def db_session():
     session = TestingSessionLocal()

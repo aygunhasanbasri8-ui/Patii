@@ -3,7 +3,6 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, Touchable
 import Button from '../components/Button';
 import Input from '../components/Input';
 import PawMark from '../components/PawMark';
-import TurnstileWidget from '../components/TurnstileWidget';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 
 export default function AuthScreen({
@@ -18,7 +17,6 @@ export default function AuthScreen({
   const [mode, setMode] = useState('login');
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [loginTurnstileToken, setLoginTurnstileToken] = useState(null);
 
   const [registerForm, setRegisterForm] = useState({
     full_name: '',
@@ -26,7 +24,6 @@ export default function AuthScreen({
     password: '',
     confirmPassword: '',
   });
-  const [registerTurnstileToken, setRegisterTurnstileToken] = useState(null);
 
   const [verifyEmail, setVerifyEmail] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
@@ -49,12 +46,10 @@ export default function AuthScreen({
       full_name: registerForm.full_name,
       email: registerForm.email,
       password: registerForm.password,
-      turnstile_token: registerTurnstileToken,
     });
     if (ok) {
       setVerifyEmail(registerForm.email);
       setRegisterForm({ full_name: '', email: '', password: '', confirmPassword: '' });
-      setRegisterTurnstileToken(null);
       setVerifyCode('');
       setMode('verify');
     }
@@ -150,12 +145,11 @@ export default function AuthScreen({
               value={loginForm.password}
               onChangeText={(v) => setLoginForm((p) => ({ ...p, password: v }))}
             />
-            <TurnstileWidget onToken={setLoginTurnstileToken} />
             <Button
               title="Giriş Yap"
               loading={loading}
               style={{ marginTop: spacing.xl }}
-              onPress={() => onLogin({ ...loginForm, turnstile_token: loginTurnstileToken })}
+              onPress={() => onLogin({ ...loginForm })}
             />
             <TouchableOpacity
               style={styles.linkRow}
@@ -196,7 +190,6 @@ export default function AuthScreen({
               value={registerForm.confirmPassword}
               onChangeText={(v) => setRegisterForm((p) => ({ ...p, confirmPassword: v }))}
             />
-            <TurnstileWidget onToken={setRegisterTurnstileToken} />
             <Button
               title="Kayıt Ol"
               loading={loading}
