@@ -64,3 +64,6 @@ __pycache__/
 .coverage
 htmlcov/
 
+# User-uploaded files (runtime artifacts)
+backend/static/uploads/
+
