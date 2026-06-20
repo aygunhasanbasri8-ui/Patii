@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret-not-for-production")
 
 from app.db import get_db  # noqa: E402 — env var set edilmeden önce import olmamalı
-from app.models import Base  # noqa: E402
+from app.models import Base, User  # noqa: E402
 from main import app  # noqa: E402
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
@@ -22,6 +22,11 @@ def setup_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def mock_send_email(monkeypatch):
+    monkeypatch.setattr("app.mail.send_email", lambda *a, **kw: True)
 
 
 @pytest.fixture
@@ -48,13 +53,17 @@ def client(db_session):
 
 
 @pytest.fixture
-def registered_user(client):
+def registered_user(client, db_session):
     user_data = {
         "full_name": "Test User",
         "email": "test@example.com",
         "password": "testpassword123"
     }
-    client.post("/api/auth/register", json=user_data)
+    resp = client.post("/api/auth/register", json=user_data)
+    assert resp.status_code == 200, resp.text
+    user = db_session.query(User).filter(User.email == user_data["email"]).first()
+    user.is_verified = True
+    db_session.commit()
     return user_data
 
 

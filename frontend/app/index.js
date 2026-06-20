@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, TouchableOpacity, View } from 'react-native';
 
 import * as api from './lib/api';
 import { ApiError } from './lib/api';
+
 import { useAuth } from './hooks/useAuth';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { colors } from './theme/tokens';
@@ -119,14 +120,14 @@ export default function Page() {
   }, [selected]);
 
   // --- Auth handlers -----------------------------------------------------------
-  const onLogin = async ({ email, password }) => {
+  const onLogin = async ({ email, password, turnstile_token }) => {
     if (!email.trim() || !password) {
       Alert.alert('Eksik alan', 'E-posta ve şifre girmelisin.');
       return;
     }
     try {
       setAuthLoading(true);
-      const { token, userId: uid } = await auth.login(email.trim(), password);
+      const { token, userId: uid } = await auth.login(email.trim(), password, turnstile_token);
       await fetchPets(token, uid);
     } catch (e) {
       showError('Giriş hatası', e);
@@ -135,7 +136,7 @@ export default function Page() {
     }
   };
 
-  const onRegister = async ({ full_name, email, password }) => {
+  const onRegister = async ({ full_name, email, password, turnstile_token }) => {
     if (!full_name.trim() || !email.trim() || !password) {
       Alert.alert('Eksik alan', 'Tüm alanları doldurmalısın.');
       return false;
@@ -146,11 +147,68 @@ export default function Page() {
     }
     try {
       setAuthLoading(true);
-      await auth.register(full_name.trim(), email.trim(), password);
-      Alert.alert('Başarılı', 'Kayıt tamamlandı, şimdi giriş yapabilirsin.');
+      await auth.register(full_name.trim(), email.trim(), password, turnstile_token);
       return true;
     } catch (e) {
       showError('Kayıt hatası', e);
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const onVerifyEmail = async ({ email, code }) => {
+    try {
+      setAuthLoading(true);
+      await api.verifyEmail({ email, code });
+      Alert.alert('Başarılı', 'E-posta doğrulandı. Şimdi giriş yapabilirsin.');
+      return true;
+    } catch (e) {
+      showError('Doğrulama hatası', e);
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const onResendVerification = async ({ email }) => {
+    try {
+      setAuthLoading(true);
+      await api.resendVerification({ email });
+      Alert.alert('Kod gönderildi', 'Yeni doğrulama kodu e-postana gönderildi.');
+    } catch (e) {
+      showError('Hata', e);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const onForgotPassword = async ({ email }) => {
+    if (!email.trim()) {
+      Alert.alert('Eksik alan', 'E-posta adresini girmelisin.');
+      return false;
+    }
+    try {
+      setAuthLoading(true);
+      await api.forgotPassword({ email: email.trim() });
+      Alert.alert('Kod gönderildi', 'Eğer bu e-posta kayıtlıysa sıfırlama kodu gönderildi.');
+      return true;
+    } catch (e) {
+      showError('Hata', e);
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const onResetPassword = async ({ email, code, new_password }) => {
+    try {
+      setAuthLoading(true);
+      await api.resetPassword({ email, code, new_password });
+      Alert.alert('Başarılı', 'Şifren güncellendi. Şimdi giriş yapabilirsin.');
+      return true;
+    } catch (e) {
+      showError('Şifre sıfırlama hatası', e);
       return false;
     } finally {
       setAuthLoading(false);
@@ -427,7 +485,17 @@ export default function Page() {
   }
 
   if (!authToken) {
-    return <AuthScreen onLogin={onLogin} onRegister={onRegister} loading={authLoading} />;
+    return (
+      <AuthScreen
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onVerifyEmail={onVerifyEmail}
+        onResendVerification={onResendVerification}
+        onForgotPassword={onForgotPassword}
+        onResetPassword={onResetPassword}
+        loading={authLoading}
+      />
+    );
   }
 
   const upcomingReminders = reminders;

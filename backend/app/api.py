@@ -13,9 +13,29 @@ def register(user: schemas.UserCreate, session: Session = Depends(db.get_db)):
     return services.register_user(session, user)
 
 
+@router.post("/auth/verify-email")
+def verify_email(payload: schemas.VerifyEmail, session: Session = Depends(db.get_db)):
+    return services.verify_email_code(session, payload)
+
+
+@router.post("/auth/resend-verification")
+def resend_verification(payload: schemas.ResendVerification, session: Session = Depends(db.get_db)):
+    return services.resend_verification_code(session, payload)
+
+
 @router.post("/auth/login")
 def login(user_data: schemas.UserLogin, session: Session = Depends(db.get_db)):
     return services.login_user(session, user_data)
+
+
+@router.post("/auth/forgot-password")
+def forgot_password(payload: schemas.ForgotPassword, session: Session = Depends(db.get_db)):
+    return services.request_password_reset(session, payload)
+
+
+@router.post("/auth/reset-password")
+def reset_password(payload: schemas.ResetPassword, session: Session = Depends(db.get_db)):
+    return services.reset_password(session, payload)
 
 
 @router.post("/pets/add")

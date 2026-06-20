@@ -2,20 +2,25 @@ import logging
 import os
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, llm, ml_model, repositories, schemas
+from . import core, llm, mail, ml_model, repositories, schemas, turnstile
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _UPLOADS_DIR = os.path.join(_APP_DIR, "..", "static", "uploads")
 
 logger = logging.getLogger(__name__)
 
+_RESEND_COOLDOWN_SECONDS = 60
+_RESET_CODE_EXPIRE_MINUTES = 15
+
 
 def register_user(db: Session, payload: schemas.UserCreate) -> dict:
+    turnstile.verify(payload.turnstile_token)
+
     db_user = repositories.get_user_by_email(db, payload.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı!")
@@ -26,13 +31,75 @@ def register_user(db: Session, payload: schemas.UserCreate) -> dict:
         email=payload.email,
         hashed_password=core.hash_password(payload.password),
     )
-    return {"message": "Kayıt başarılı!", "user_id": user.id}
+
+    code = f"{random.randint(0, 999999):06d}"
+    repositories.update_user_verification(db, user, code, datetime.utcnow())
+
+    mail.send_email(
+        to_email=payload.email,
+        subject="Pati — E-posta Doğrulama",
+        html_content=(
+            f"<p>Merhaba {payload.full_name},</p>"
+            f"<p>Doğrulama kodun: <strong>{code}</strong></p>"
+            f"<p>Bu kodu uygulamaya girerek hesabını etkinleştir.</p>"
+        ),
+    )
+
+    return {
+        "message": "Kayıt başarılı! E-postana gönderilen kodu girerek hesabını doğrula.",
+        "user_id": user.id,
+    }
+
+
+def verify_email_code(db: Session, payload: schemas.VerifyEmail) -> dict:
+    user = repositories.get_user_by_email(db, payload.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+    if user.is_verified:
+        return {"message": "Hesap zaten doğrulanmış."}
+    if user.verification_code != payload.code:
+        raise HTTPException(status_code=400, detail="Doğrulama kodu yanlış.")
+
+    repositories.mark_user_verified(db, user)
+    return {"message": "E-posta başarıyla doğrulandı!"}
+
+
+def resend_verification_code(db: Session, payload: schemas.ResendVerification) -> dict:
+    user = repositories.get_user_by_email(db, payload.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+    if user.is_verified:
+        raise HTTPException(status_code=400, detail="Hesap zaten doğrulanmış.")
+
+    if user.verification_code_sent_at:
+        elapsed = (datetime.utcnow() - user.verification_code_sent_at).total_seconds()
+        if elapsed < _RESEND_COOLDOWN_SECONDS:
+            remaining = int(_RESEND_COOLDOWN_SECONDS - elapsed)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Lütfen {remaining} saniye bekleyip tekrar dene.",
+            )
+
+    code = f"{random.randint(0, 999999):06d}"
+    repositories.update_user_verification(db, user, code, datetime.utcnow())
+
+    mail.send_email(
+        to_email=payload.email,
+        subject="Pati — E-posta Doğrulama (Yeniden)",
+        html_content=f"<p>Yeni doğrulama kodun: <strong>{code}</strong></p>",
+    )
+    return {"message": "Doğrulama kodu yeniden gönderildi."}
 
 
 def login_user(db: Session, payload: schemas.UserLogin) -> dict:
+    turnstile.verify(payload.turnstile_token)
+
     user = repositories.get_user_by_email(db, payload.email)
     if not user or not core.verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")
+
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Lütfen önce e-postanı doğrula.")
 
     token = core.create_access_token(user.email)
     return {
@@ -41,6 +108,38 @@ def login_user(db: Session, payload: schemas.UserLogin) -> dict:
         "user_name": user.full_name,
         "user_id": user.id,
     }
+
+
+def request_password_reset(db: Session, payload: schemas.ForgotPassword) -> dict:
+    user = repositories.get_user_by_email(db, payload.email)
+    if user:
+        code = f"{random.randint(0, 999999):06d}"
+        expires_at = datetime.utcnow() + timedelta(minutes=_RESET_CODE_EXPIRE_MINUTES)
+        repositories.update_user_reset_code(db, user, code, expires_at)
+        mail.send_email(
+            to_email=payload.email,
+            subject="Pati — Şifre Sıfırlama",
+            html_content=(
+                f"<p>Şifre sıfırlama kodun: <strong>{code}</strong></p>"
+                f"<p>Bu kod {_RESET_CODE_EXPIRE_MINUTES} dakika geçerlidir.</p>"
+            ),
+        )
+    return {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi."}
+
+
+def reset_password(db: Session, payload: schemas.ResetPassword) -> dict:
+    user = repositories.get_user_by_email(db, payload.email)
+    if not user or not user.reset_code:
+        raise HTTPException(status_code=400, detail="Geçersiz sıfırlama isteği.")
+    if user.reset_code != payload.code:
+        raise HTTPException(status_code=400, detail="Sıfırlama kodu yanlış.")
+    if user.reset_code_expires_at and datetime.utcnow() > user.reset_code_expires_at:
+        raise HTTPException(status_code=400, detail="Sıfırlama kodunun süresi dolmuş.")
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Şifre en az 6 karakter olmalı.")
+
+    repositories.update_user_password(db, user, core.hash_password(payload.new_password))
+    return {"message": "Şifre başarıyla güncellendi."}
 
 
 def _get_user_from_token(db: Session, token: str):
@@ -141,7 +240,6 @@ def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None
     pet = repositories.get_pet_by_id(db, pet_id)
     if not pet:
         raise HTTPException(status_code=404, detail="Pati bulunamadı!")
-
 
     logger.info(
         "analyze_meow çağrıldı — audio_bytes: %s bayt, model_available: %s",
@@ -290,7 +388,6 @@ def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
     if not question:
         raise HTTPException(status_code=400, detail="Soru boş olamaz!")
 
-
     pet_context = ""
     if payload.pet_id is not None:
         pet = repositories.get_pet_by_id(db, payload.pet_id)
@@ -301,7 +398,6 @@ def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
     answer = llm.generate_text(prompt)
 
     if answer is None:
-
         answer = _keyword_fallback_answer(question)
 
     return {"answer": answer}

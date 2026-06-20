@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from . import models
@@ -10,6 +12,44 @@ def get_user_by_email(db: Session, email: str) -> models.User | None:
 def create_user(db: Session, full_name: str, email: str, hashed_password: str) -> models.User:
     user = models.User(full_name=full_name, email=email, hashed_password=hashed_password)
     db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_user_verification(
+    db: Session, user: models.User, code: str, sent_at: datetime
+) -> models.User:
+    user.verification_code = code
+    user.verification_code_sent_at = sent_at
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def mark_user_verified(db: Session, user: models.User) -> models.User:
+    user.is_verified = True
+    user.verification_code = None
+    user.verification_code_sent_at = None
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_user_reset_code(
+    db: Session, user: models.User, code: str, expires_at: datetime
+) -> models.User:
+    user.reset_code = code
+    user.reset_code_expires_at = expires_at
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_user_password(db: Session, user: models.User, hashed_password: str) -> models.User:
+    user.hashed_password = hashed_password
+    user.reset_code = None
+    user.reset_code_expires_at = None
     db.commit()
     db.refresh(user)
     return user

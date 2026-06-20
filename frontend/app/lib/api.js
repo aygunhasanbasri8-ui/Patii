@@ -119,3 +119,16 @@ export const deleteReminder = (reminderId, token) =>
 // --- Chatbot ------------------------------------------------------------------
 export const askChatbot = (payload, token) =>
   requestApi('/api/chatbot/ask', { method: 'POST', body: JSON.stringify(payload) }, token);
+
+// --- Auth extended ------------------------------------------------------------
+export const verifyEmail = (payload) =>
+  requestApi('/api/auth/verify-email', { method: 'POST', body: JSON.stringify(payload) });
+
+export const resendVerification = (payload) =>
+  requestApi('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify(payload) });
+
+export const forgotPassword = (payload) =>
+  requestApi('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(payload) });
+
+export const resetPassword = (payload) =>
+  requestApi('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(payload) });

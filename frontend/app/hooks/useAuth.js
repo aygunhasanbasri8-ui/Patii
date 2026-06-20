@@ -37,16 +37,16 @@ export function useAuth() {
     ]);
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const data = await api.login({ email, password });
+  const login = useCallback(async (email, password, turnstile_token = null) => {
+    const data = await api.login({ email, password, turnstile_token });
     const token = data.access_token || '';
     const id = String(data.user_id || '');
     await persistSession(token, data.user_name || '', id);
     return { token, userId: id };
   }, [persistSession]);
 
-  const register = useCallback(async (full_name, email, password) => {
-    return api.register({ full_name, email, password });
+  const register = useCallback(async (full_name, email, password, turnstile_token = null) => {
+    return api.register({ full_name, email, password, turnstile_token });
   }, []);
 
   const logout = useCallback(async () => {

@@ -7,7 +7,7 @@ class TestRegister:
         })
         assert response.status_code == 200
         data = response.json()
-        assert data["message"] == "Kayıt başarılı!"
+        assert "Kayıt başarılı" in data["message"]
         assert "user_id" in data
 
     def test_register_duplicate_email(self, client, registered_user):

@@ -7,11 +7,32 @@ class UserCreate(BaseModel):
     full_name: str
     email: str
     password: str
+    turnstile_token: Optional[str] = None
 
 
 class UserLogin(BaseModel):
     email: str
     password: str
+    turnstile_token: Optional[str] = None
+
+
+class VerifyEmail(BaseModel):
+    email: str
+    code: str
+
+
+class ResendVerification(BaseModel):
+    email: str
+
+
+class ForgotPassword(BaseModel):
+    email: str
+
+
+class ResetPassword(BaseModel):
+    email: str
+    code: str
+    new_password: str
 
 
 class PetCreate(BaseModel):
