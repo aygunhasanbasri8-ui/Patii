@@ -49,7 +49,8 @@ class TestChatbot:
         )
         assert response.status_code == 400
 
-    def test_ask_chatbot_unknown_topic_returns_default(self, client, auth_token):
+    def test_ask_chatbot_unknown_topic_returns_default(self, client, auth_token, monkeypatch):
+        monkeypatch.setattr("app.llm.generate_text", lambda *a, **kw: None)
         response = client.post(
             "/api/chatbot/ask",
             json={"question": "kuantum fiziği nedir"},

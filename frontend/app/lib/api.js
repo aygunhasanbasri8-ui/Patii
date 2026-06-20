@@ -1,4 +1,4 @@
-export const BACKEND_BASE_URL = 'http://192.168.1.4:8000';
+export const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const DEFAULT_TIMEOUT_MS = 10000;
 
 export class ApiError extends Error {

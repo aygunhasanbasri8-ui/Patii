@@ -8,9 +8,6 @@ from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
-# PRODUCTION: JWT_SECRET_KEY ortam değişkenini güçlü rastgele bir değerle set et.
-# Üretmek için: python -c "import secrets; print(secrets.token_hex(32))"
-# Aşağıdaki fallback YALNIZCA geliştirme ortamı içindir, production'da KESİNLİKLE kullanma.
 _jwt_secret = os.getenv("JWT_SECRET_KEY")
 if _jwt_secret:
     SECRET_KEY = _jwt_secret

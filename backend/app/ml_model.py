@@ -45,8 +45,6 @@ def is_model_available() -> bool:
 
 
 def load_model() -> None:
-    """FastAPI startup event'inden çağrılır. Dosyalar yoksa sessizce
-    stub moduna düşer (uygulamayı çökertmez)."""
     global _model, _labels
 
     if not MODEL_PATH.exists() or not LABELS_PATH.exists():
@@ -81,8 +79,7 @@ def _extract_melspectrogram(file_bytes: bytes) -> np.ndarray:
 
     import librosa
 
-    # audioread'in ffmpeg entegrasyonu güvenilmez; ffmpeg'i doğrudan çağırıp
-    # her format (CAF, M4A, AAC, WAV) için standart WAV üretiyoruz.
+    # ffmpeg doğrudan çağrılıyor: CAF/M4A/AAC/WAV tüm formatları için
     in_fd, in_path = tempfile.mkstemp(suffix=".audio")
     out_fd, out_path = tempfile.mkstemp(suffix=".wav")
     os.close(in_fd)
@@ -128,14 +125,6 @@ LOW_CONFIDENCE_THRESHOLD = 0.45
 
 
 def predict_from_audio(file_bytes: bytes) -> dict:
-    """Ses byte'larından tahmin döner:
-    {"label", "result", "advice", "confidence", "probabilities"}.
-    "probabilities", her sınıfın etiketiyle olasılığını eşleyen bir sözlük
-    döndürür (örn. {"Ac": 0.62, "Huzursuz": 0.23, "Sakin": 0.15}) — bu,
-    modelin tek bir "kesin" cevap yerine ne kadar net/kararsız olduğunu
-    şeffaf şekilde göstermek için kullanılır.
-    Model yüklenmemişse RuntimeError fırlatır; çağıran taraf (services.py)
-    bunu yakalayıp stub davranışına düşmelidir."""
     if not is_model_available():
         raise RuntimeError("Model yüklü değil.")
 

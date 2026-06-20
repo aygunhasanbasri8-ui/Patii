@@ -122,10 +122,6 @@ def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:
 
 
 def _contextual_uncertain_advice(db: Session, pet) -> str | None:
-    """ML modeli 'Belirsiz' sonucu döndürdüğünde, pati ve son hatırlatıcı
-    bağlamını LLM'e vererek daha faydalı bir öneri üretmeyi dener.
-    LLM kullanılamıyorsa None döner, çağıran taraf modelin kendi varsayılan
-    advice metnini kullanmaya devam eder."""
     reminders = repositories.get_reminders_by_pet(db, pet.id)
     recent_reminder_text = reminders[-1].text if reminders else "kayıtlı bir hatırlatıcı yok"
 

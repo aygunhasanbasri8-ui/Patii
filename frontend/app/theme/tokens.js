@@ -1,28 +1,20 @@
-// theme/tokens.js
-// Pati uygulamasının tek doğruluk kaynağı (single source of truth) tema
-// token sistemi. Tüm renk/spacing/typography kararları buradan türetilir.
-
 export const colors = {
-  // Marka — sıcak turuncu aile
   primary: '#FF8C42',
   primaryDark: '#E8722B',
   primaryLight: '#FFB67A',
   primaryXLight: '#FFF5EC',
 
-  // Yüzeyler
   background: '#FFF8F0',
   surface: '#FFFFFF',
   surfaceSoft: '#FFEDDB',
   surfaceMuted: '#FFF1E2',
   surfaceElevated: '#FFFCF8',
 
-  // Metin
   textPrimary: '#3A2B22',
   textSecondary: '#9C8270',
   textOnPrimary: '#FFFFFF',
   textMuted: '#C2A992',
 
-  // Durum
   success: '#6FA988',
   successDark: '#4D8A6A',
   successSoft: '#E6F2EC',
@@ -35,7 +27,6 @@ export const colors = {
   warning: '#F4A261',
   warningSoft: '#FDF0E4',
 
-  // Yardımcı
   border: '#F0DFCB',
   borderFocus: '#FF8C42',
   divider: '#F4E8D8',
