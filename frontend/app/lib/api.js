@@ -83,16 +83,19 @@ export const uploadPetAvatar = (petId, imageUri, token) => {
   return requestApi(`/api/pets/${petId}/avatar`, { method: 'POST', body: formData }, token);
 };
 
-export const analyzeMeow = (petId, token, audioUri = null) => {
+export const analyzeMeow = async (petId, token, audioUri = null) => {
   if (!audioUri) {
     return requestApi(`/api/analyze/meow?pet_id=${petId}`, { method: 'POST' }, token, 25000);
   }
   const formData = new FormData();
-  formData.append('audio', {
-    uri: audioUri,
-    name: 'meow.wav',
-    type: 'audio/wav',
-  });
+  if (audioUri instanceof Blob) {
+    // Web: MediaRecorder'dan gelen Blob
+    const ext = audioUri.type.includes('ogg') ? 'ogg' : 'webm';
+    formData.append('audio', audioUri, `meow.${ext}`);
+  } else {
+    // Native: expo-av'dan gelen dosya URI'si
+    formData.append('audio', { uri: audioUri, name: 'meow.wav', type: 'audio/wav' });
+  }
   return requestApi(
     `/api/analyze/meow?pet_id=${petId}`,
     { method: 'POST', body: formData },
