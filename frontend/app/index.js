@@ -36,6 +36,7 @@ export default function Page() {
 
   const [bootLoading, setBootLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -125,10 +126,17 @@ export default function Page() {
     
   }, [selected]);
 
+  const clearAuthError = useCallback(() => setAuthError(null), []);
+
+  const _authErr = (e) => {
+    setAuthError(e instanceof ApiError ? e.message : e?.message || 'Bilinmeyen bir hata oluştu.');
+  };
+
   // --- Auth handlers -----------------------------------------------------------
   const onLogin = async ({ email, password, turnstile_token }) => {
+    setAuthError(null);
     if (!email.trim() || !password) {
-      Alert.alert('Eksik alan', 'E-posta ve şifre girmelisin.');
+      setAuthError('E-posta ve şifre girmelisin.');
       return;
     }
     try {
@@ -136,19 +144,20 @@ export default function Page() {
       const { token, userId: uid } = await auth.login(email.trim(), password, turnstile_token);
       await fetchPets(token, uid);
     } catch (e) {
-      showError('Giriş hatası', e);
+      _authErr(e);
     } finally {
       setAuthLoading(false);
     }
   };
 
   const onRegister = async ({ full_name, email, password, turnstile_token }) => {
+    setAuthError(null);
     if (!full_name.trim() || !email.trim() || !password) {
-      Alert.alert('Eksik alan', 'Tüm alanları doldurmalısın.');
+      setAuthError('Tüm alanları doldurmalısın.');
       return false;
     }
     if (password.length < 6) {
-      Alert.alert('Zayıf şifre', 'Şifre en az 6 karakter olmalı.');
+      setAuthError('Şifre en az 6 karakter olmalı.');
       return false;
     }
     try {
@@ -156,7 +165,7 @@ export default function Page() {
       const data = await auth.register(full_name.trim(), email.trim(), password, turnstile_token);
       return data ?? true;
     } catch (e) {
-      showError('Kayıt hatası', e);
+      _authErr(e);
       return false;
     } finally {
       setAuthLoading(false);
@@ -164,13 +173,13 @@ export default function Page() {
   };
 
   const onVerifyEmail = async ({ email, code }) => {
+    setAuthError(null);
     try {
       setAuthLoading(true);
       await api.verifyEmail({ email, code });
-      Alert.alert('Başarılı', 'E-posta doğrulandı. Şimdi giriş yapabilirsin.');
       return true;
     } catch (e) {
-      showError('Doğrulama hatası', e);
+      _authErr(e);
       return false;
     } finally {
       setAuthLoading(false);
@@ -178,13 +187,13 @@ export default function Page() {
   };
 
   const onResendVerification = async ({ email }) => {
+    setAuthError(null);
     try {
       setAuthLoading(true);
       const data = await api.resendVerification({ email });
-      Alert.alert('Kod gönderildi', 'Yeni doğrulama kodu e-postana gönderildi.');
       return data;
     } catch (e) {
-      showError('Hata', e);
+      _authErr(e);
       return null;
     } finally {
       setAuthLoading(false);
@@ -192,17 +201,17 @@ export default function Page() {
   };
 
   const onForgotPassword = async ({ email }) => {
+    setAuthError(null);
     if (!email.trim()) {
-      Alert.alert('Eksik alan', 'E-posta adresini girmelisin.');
+      setAuthError('E-posta adresini girmelisin.');
       return false;
     }
     try {
       setAuthLoading(true);
       const data = await api.forgotPassword({ email: email.trim() });
-      Alert.alert('Kod gönderildi', 'Eğer bu e-posta kayıtlıysa sıfırlama kodu gönderildi.');
       return data ?? true;
     } catch (e) {
-      showError('Hata', e);
+      _authErr(e);
       return false;
     } finally {
       setAuthLoading(false);
@@ -210,13 +219,13 @@ export default function Page() {
   };
 
   const onResetPassword = async ({ email, code, new_password }) => {
+    setAuthError(null);
     try {
       setAuthLoading(true);
       await api.resetPassword({ email, code, new_password });
-      Alert.alert('Başarılı', 'Şifren güncellendi. Şimdi giriş yapabilirsin.');
       return true;
     } catch (e) {
-      showError('Şifre sıfırlama hatası', e);
+      _authErr(e);
       return false;
     } finally {
       setAuthLoading(false);
@@ -502,6 +511,8 @@ export default function Page() {
         onForgotPassword={onForgotPassword}
         onResetPassword={onResetPassword}
         loading={authLoading}
+        error={authError}
+        onClearError={clearAuthError}
       />
     );
   }

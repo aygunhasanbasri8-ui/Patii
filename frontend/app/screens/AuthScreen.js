@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView, Platform, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
@@ -16,8 +16,18 @@ export default function AuthScreen({
   onForgotPassword,
   onResetPassword,
   loading,
+  error,
+  onClearError,
 }) {
   const [mode, setMode] = useState('login');
+  const [localError, setLocalError] = useState(null);
+
+  useEffect(() => {
+    setLocalError(null);
+    onClearError?.();
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const displayError = localError || error;
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({
@@ -44,9 +54,10 @@ export default function AuthScreen({
 
   const handleRegisterSubmit = async () => {
     if (registerForm.password !== registerForm.confirmPassword) {
-      alert('Şifreler eşleşmiyor.');
+      setLocalError('Şifreler eşleşmiyor.');
       return;
     }
+    setLocalError(null);
     const result = await onRegister({
       full_name: registerForm.full_name,
       email: registerForm.email,
@@ -84,9 +95,10 @@ export default function AuthScreen({
 
   const handleResetSubmit = async () => {
     if (resetPassword !== resetConfirm) {
-      alert('Şifreler eşleşmiyor.');
+      setLocalError('Şifreler eşleşmiyor.');
       return;
     }
+    setLocalError(null);
     const ok = await onResetPassword({
       email: resetEmail,
       code: resetCode,
@@ -102,6 +114,11 @@ export default function AuthScreen({
   function renderFormContent() {
     return (
       <>
+        {displayError && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{displayError}</Text>
+          </View>
+        )}
         {showTabs && (
           <View style={styles.switchRow}>
             <TouchableOpacity
@@ -377,6 +394,15 @@ const styles = StyleSheet.create({
   bold: { fontWeight: '700', color: colors.textPrimary },
   linkRow: { alignItems: 'center', marginTop: spacing.md },
   link: { ...typography.caption, color: colors.primary },
+  errorBox: {
+    backgroundColor: colors.dangerSoft,
+    borderColor: colors.danger,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  errorText: { ...typography.caption, color: colors.dangerDark, fontWeight: '700' },
   fallbackBox: {
     backgroundColor: colors.warningSoft,
     borderColor: colors.warning,
