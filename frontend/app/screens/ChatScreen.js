@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     width: 26, height: 26, borderRadius: radius.circle,
     backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, marginTop: 2,
   },
-  bubble: { borderRadius: radius.lg, paddingHorizontal: spacing.lg, paddingVertical: 11, ...shadow.card },
+  bubble: { borderRadius: radius.lg, paddingHorizontal: spacing.lg, paddingVertical: 11, flexShrink: 1, ...shadow.card },
   bubbleUser: { backgroundColor: colors.primary, borderTopRightRadius: 6 },
   bubbleBot: { backgroundColor: colors.surface, borderTopLeftRadius: 6 },
   bubbleText: { ...typography.body, color: colors.textPrimary, lineHeight: 20 },
