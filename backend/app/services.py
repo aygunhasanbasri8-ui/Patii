@@ -33,7 +33,8 @@ def register_user(db: Session, payload: schemas.UserCreate) -> dict:
     code = f"{random.randint(0, 999999):06d}"
     repositories.update_user_verification(db, user, code, datetime.utcnow())
 
-    mail.send_email(
+    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
+    mail_sent = mail.send_email(
         to_email=payload.email,
         subject="Pati — E-posta Doğrulama",
         html_content=(
@@ -43,10 +44,13 @@ def register_user(db: Session, payload: schemas.UserCreate) -> dict:
         ),
     )
 
-    return {
+    result = {
         "message": "Kayıt başarılı! E-postana gönderilen kodu girerek hesabını doğrula.",
         "user_id": user.id,
     }
+    if not mail_sent:
+        result["verification_code_fallback"] = code
+    return result
 
 
 def verify_email_code(db: Session, payload: schemas.VerifyEmail) -> dict:
@@ -81,12 +85,16 @@ def resend_verification_code(db: Session, payload: schemas.ResendVerification) -
     code = f"{random.randint(0, 999999):06d}"
     repositories.update_user_verification(db, user, code, datetime.utcnow())
 
-    mail.send_email(
+    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
+    mail_sent = mail.send_email(
         to_email=payload.email,
         subject="Pati — E-posta Doğrulama (Yeniden)",
         html_content=f"<p>Yeni doğrulama kodun: <strong>{code}</strong></p>",
     )
-    return {"message": "Doğrulama kodu yeniden gönderildi."}
+    result = {"message": "Doğrulama kodu yeniden gönderildi."}
+    if not mail_sent:
+        result["verification_code_fallback"] = code
+    return result
 
 
 def login_user(db: Session, payload: schemas.UserLogin) -> dict:
@@ -112,7 +120,8 @@ def request_password_reset(db: Session, payload: schemas.ForgotPassword) -> dict
         code = f"{random.randint(0, 999999):06d}"
         expires_at = datetime.utcnow() + timedelta(minutes=_RESET_CODE_EXPIRE_MINUTES)
         repositories.update_user_reset_code(db, user, code, expires_at)
-        mail.send_email(
+        # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
+        mail_sent = mail.send_email(
             to_email=payload.email,
             subject="Pati — Şifre Sıfırlama",
             html_content=(
@@ -120,6 +129,8 @@ def request_password_reset(db: Session, payload: schemas.ForgotPassword) -> dict
                 f"<p>Bu kod {_RESET_CODE_EXPIRE_MINUTES} dakika geçerlidir.</p>"
             ),
         )
+        if not mail_sent:
+            return {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi.", "reset_code_fallback": code}
     return {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi."}
 
 

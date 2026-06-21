@@ -153,8 +153,8 @@ export default function Page() {
     }
     try {
       setAuthLoading(true);
-      await auth.register(full_name.trim(), email.trim(), password, turnstile_token);
-      return true;
+      const data = await auth.register(full_name.trim(), email.trim(), password, turnstile_token);
+      return data ?? true;
     } catch (e) {
       showError('Kayıt hatası', e);
       return false;
@@ -180,10 +180,12 @@ export default function Page() {
   const onResendVerification = async ({ email }) => {
     try {
       setAuthLoading(true);
-      await api.resendVerification({ email });
+      const data = await api.resendVerification({ email });
       Alert.alert('Kod gönderildi', 'Yeni doğrulama kodu e-postana gönderildi.');
+      return data;
     } catch (e) {
       showError('Hata', e);
+      return null;
     } finally {
       setAuthLoading(false);
     }
@@ -196,9 +198,9 @@ export default function Page() {
     }
     try {
       setAuthLoading(true);
-      await api.forgotPassword({ email: email.trim() });
+      const data = await api.forgotPassword({ email: email.trim() });
       Alert.alert('Kod gönderildi', 'Eğer bu e-posta kayıtlıysa sıfırlama kodu gönderildi.');
-      return true;
+      return data ?? true;
     } catch (e) {
       showError('Hata', e);
       return false;

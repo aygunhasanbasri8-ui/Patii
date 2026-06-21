@@ -25,11 +25,13 @@ export default function AuthScreen({
   });
   const [verifyEmail, setVerifyEmail] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
+  const [verifyFallbackCode, setVerifyFallbackCode] = useState(null);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [resetPassword, setResetPassword] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
+  const [resetFallbackCode, setResetFallbackCode] = useState(null);
 
   const showTabs = mode === 'login' || mode === 'register';
 
@@ -45,13 +47,14 @@ export default function AuthScreen({
       alert('Şifreler eşleşmiyor.');
       return;
     }
-    const ok = await onRegister({
+    const result = await onRegister({
       full_name: registerForm.full_name,
       email: registerForm.email,
       password: registerForm.password,
     });
-    if (ok) {
+    if (result) {
       setVerifyEmail(registerForm.email);
+      setVerifyFallbackCode(result.verification_code_fallback ?? null);
       setRegisterForm({ full_name: '', email: '', password: '', confirmPassword: '' });
       setVerifyCode('');
       setMode('verify');
@@ -68,9 +71,10 @@ export default function AuthScreen({
   };
 
   const handleForgotSubmit = async () => {
-    const ok = await onForgotPassword({ email: forgotEmail });
-    if (ok) {
+    const result = await onForgotPassword({ email: forgotEmail });
+    if (result) {
       setResetEmail(forgotEmail);
+      setResetFallbackCode(result.reset_code_fallback ?? null);
       setResetCode('');
       setResetPassword('');
       setResetConfirm('');
@@ -195,6 +199,11 @@ export default function AuthScreen({
             <Text style={styles.infoText}>
               <Text style={styles.bold}>{verifyEmail}</Text> adresine 6 haneli bir doğrulama kodu gönderdik.
             </Text>
+            {verifyFallbackCode && (
+              <View style={styles.fallbackBox}>
+                <Text style={styles.fallbackText}>Mail gönderilemedi — demo kodu: {verifyFallbackCode}</Text>
+              </View>
+            )}
             <Input
               label="Doğrulama Kodu"
               placeholder="123456"
@@ -209,10 +218,16 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={handleVerifySubmit}
             />
-            <TouchableOpacity style={styles.linkRow} onPress={() => onResendVerification({ email: verifyEmail })}>
+            <TouchableOpacity
+              style={styles.linkRow}
+              onPress={async () => {
+                const result = await onResendVerification({ email: verifyEmail });
+                if (result) setVerifyFallbackCode(result.verification_code_fallback ?? null);
+              }}
+            >
               <Text style={styles.link}>Kodu tekrar gönder</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.linkRow} onPress={() => setMode('login')}>
+            <TouchableOpacity style={styles.linkRow} onPress={() => { setVerifyFallbackCode(null); setMode('login'); }}>
               <Text style={styles.link}>Giriş ekranına dön</Text>
             </TouchableOpacity>
           </View>
@@ -248,6 +263,11 @@ export default function AuthScreen({
             <Text style={styles.infoText}>
               <Text style={styles.bold}>{resetEmail}</Text> adresine gönderilen kodu ve yeni şifreni gir.
             </Text>
+            {resetFallbackCode && (
+              <View style={styles.fallbackBox}>
+                <Text style={styles.fallbackText}>Mail gönderilemedi — demo kodu: {resetFallbackCode}</Text>
+              </View>
+            )}
             <Input
               label="Sıfırlama Kodu"
               placeholder="123456"
@@ -276,10 +296,10 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={handleResetSubmit}
             />
-            <TouchableOpacity style={styles.linkRow} onPress={() => setMode('forgot')}>
+            <TouchableOpacity style={styles.linkRow} onPress={() => { setResetFallbackCode(null); setMode('forgot'); }}>
               <Text style={styles.link}>Yeni kod iste</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.linkRow} onPress={() => setMode('login')}>
+            <TouchableOpacity style={styles.linkRow} onPress={() => { setResetFallbackCode(null); setMode('login'); }}>
               <Text style={styles.link}>Giriş ekranına dön</Text>
             </TouchableOpacity>
           </View>
@@ -357,6 +377,15 @@ const styles = StyleSheet.create({
   bold: { fontWeight: '700', color: colors.textPrimary },
   linkRow: { alignItems: 'center', marginTop: spacing.md },
   link: { ...typography.caption, color: colors.primary },
+  fallbackBox: {
+    backgroundColor: colors.warningSoft,
+    borderColor: colors.warning,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  fallbackText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
 });
 
 // ── Web stiller (sadece web'de kullanılır) ────────────────────────────────
