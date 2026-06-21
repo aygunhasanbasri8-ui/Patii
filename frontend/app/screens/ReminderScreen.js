@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -7,6 +6,11 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import { Badge, EmptyState, SectionHeader } from '../components/UI';
 import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
+
+// @react-native-community/datetimepicker has no web support — conditional require
+const DateTimePicker = Platform.OS !== 'web'
+  ? require('@react-native-community/datetimepicker').default
+  : null;
 
 const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
 
@@ -129,27 +133,37 @@ export default function ReminderScreen({
             onChangeText={(v) => setForm((p) => ({ ...p, description: v }))}
           />
 
-          <View style={styles.dateFieldWrapper}>
-            <Text style={styles.dateFieldLabel}>Tarih</Text>
-            <TouchableOpacity
-              style={styles.dateFieldBox}
-              onPress={() => setShowDatePicker(true)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.dateFieldText, !form.remind_at && styles.dateFieldPlaceholder]}>
-                {form.remind_at || 'Tarih seç…'}
-              </Text>
-              <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
-            </TouchableOpacity>
-          </View>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={parseDate(form.remind_at)}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
+          {Platform.OS === 'web' ? (
+            <Input
+              label="Tarih"
+              placeholder="gg/aa/yyyy"
+              value={form.remind_at}
+              onChangeText={(v) => setForm((p) => ({ ...p, remind_at: v }))}
             />
+          ) : (
+            <>
+              <View style={styles.dateFieldWrapper}>
+                <Text style={styles.dateFieldLabel}>Tarih</Text>
+                <TouchableOpacity
+                  style={styles.dateFieldBox}
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.dateFieldText, !form.remind_at && styles.dateFieldPlaceholder]}>
+                    {form.remind_at || 'Tarih seç…'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+                </TouchableOpacity>
+              </View>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={parseDate(form.remind_at)}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                />
+              )}
+            </>
           )}
 
           <Button

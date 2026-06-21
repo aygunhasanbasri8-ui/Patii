@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import PawMark from '../components/PawMark';
@@ -17,25 +20,25 @@ export default function AuthScreen({
   const [mode, setMode] = useState('login');
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-
   const [registerForm, setRegisterForm] = useState({
-    full_name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+    full_name: '', email: '', password: '', confirmPassword: '',
   });
-
   const [verifyEmail, setVerifyEmail] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
-
   const [forgotEmail, setForgotEmail] = useState('');
-
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [resetPassword, setResetPassword] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
 
   const showTabs = mode === 'login' || mode === 'register';
+
+  const tagline =
+    mode === 'register' ? 'Aramıza katıl, bakımı kolaylaştır.' :
+    mode === 'verify'   ? 'E-postanı doğrula.' :
+    mode === 'forgot'   ? 'Şifreni sıfırla.' :
+    mode === 'reset'    ? 'Yeni şifreni belirle.' :
+    'Patilerin seni bekliyor.';
 
   const handleRegisterSubmit = async () => {
     if (registerForm.password !== registerForm.confirmPassword) {
@@ -62,10 +65,6 @@ export default function AuthScreen({
       setVerifyCode('');
       setMode('login');
     }
-  };
-
-  const handleResend = () => {
-    onResendVerification({ email: verifyEmail });
   };
 
   const handleForgotSubmit = async () => {
@@ -95,35 +94,27 @@ export default function AuthScreen({
     }
   };
 
-  const tagline =
-    mode === 'register' ? 'Aramıza katıl, bakımı kolaylaştır.' :
-    mode === 'verify'   ? 'E-postanı doğrula.' :
-    mode === 'forgot'   ? 'Şifreni sıfırla.' :
-    mode === 'reset'    ? 'Yeni şifreni belirle.' :
-    'Patilerin seni bekliyor.';
-
-  return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.hero}>
-          <PawMark size={72} />
-          <Text style={styles.brand}>Pati</Text>
-          <Text style={styles.tagline}>{tagline}</Text>
-        </View>
-
+  // Ortak form içeriği — hem mobile hem web'de aynı JSX kullanılır
+  function renderFormContent() {
+    return (
+      <>
         {showTabs && (
           <View style={styles.switchRow}>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'login' && styles.switchBtnActive]}
               onPress={() => setMode('login')}
             >
-              <Text style={[styles.switchText, mode === 'login' && styles.switchTextActive]}>Giriş Yap</Text>
+              <Text style={[styles.switchText, mode === 'login' && styles.switchTextActive]}>
+                Giriş Yap
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'register' && styles.switchBtnActive]}
               onPress={() => setMode('register')}
             >
-              <Text style={[styles.switchText, mode === 'register' && styles.switchTextActive]}>Kayıt Ol</Text>
+              <Text style={[styles.switchText, mode === 'register' && styles.switchTextActive]}>
+                Kayıt Ol
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -218,7 +209,7 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={handleVerifySubmit}
             />
-            <TouchableOpacity style={styles.linkRow} onPress={handleResend}>
+            <TouchableOpacity style={styles.linkRow} onPress={() => onResendVerification({ email: verifyEmail })}>
               <Text style={styles.link}>Kodu tekrar gönder</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.linkRow} onPress={() => setMode('login')}>
@@ -293,11 +284,58 @@ export default function AuthScreen({
             </TouchableOpacity>
           </View>
         )}
+      </>
+    );
+  }
+
+  // ── WEB: split-screen layout ──────────────────────────────────────────────
+  if (Platform.OS === 'web') {
+    return (
+      <View style={webStyles.container}>
+        {/* Sol panel: marka */}
+        <View style={webStyles.brandPanel}>
+          <PawMark size={72} />
+          <Text style={webStyles.brandName}>Pati</Text>
+          <Text style={webStyles.brandTagline}>
+            Patilerin en iyi dostu.
+          </Text>
+          <View style={webStyles.featureCard}>
+            <Text style={webStyles.featureItem}>🐾 Sağlık ve aşı hatırlatıcıları</Text>
+            <Text style={webStyles.featureItem}>🎙 AI destekli ses analizi</Text>
+            <Text style={webStyles.featureItem}>💬 Bakım asistanı ile sohbet</Text>
+          </View>
+        </View>
+
+        {/* Sağ panel: form */}
+        <ScrollView
+          contentContainerStyle={webStyles.formScroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={webStyles.formContent}>
+            <Text style={webStyles.formTagline}>{tagline}</Text>
+            {renderFormContent()}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── MOBİL: mevcut layout (değişmedi) ─────────────────────────────────────
+  return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <View style={styles.hero}>
+          <PawMark size={72} />
+          <Text style={styles.brand}>Pati</Text>
+          <Text style={styles.tagline}>{tagline}</Text>
+        </View>
+        {renderFormContent()}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+// ── Mobil stiller (değişmedi) ─────────────────────────────────────────────
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   container: { flexGrow: 1, padding: spacing.xl, justifyContent: 'center' },
@@ -311,24 +349,68 @@ const styles = StyleSheet.create({
     padding: 4,
     marginBottom: spacing.lg,
   },
-  switchBtn: {
-    flex: 1,
-    paddingVertical: 11,
-    alignItems: 'center',
-    borderRadius: radius.pill,
-  },
-  switchBtnActive: {
-    backgroundColor: colors.primary,
-  },
+  switchBtn: { flex: 1, paddingVertical: 11, alignItems: 'center', borderRadius: radius.pill },
+  switchBtnActive: { backgroundColor: colors.primary },
   switchText: { ...typography.bodyStrong, color: colors.textSecondary },
   switchTextActive: { color: colors.textOnPrimary },
-  infoText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-    lineHeight: 20,
-  },
+  infoText: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.md, lineHeight: 20 },
   bold: { fontWeight: '700', color: colors.textPrimary },
   linkRow: { alignItems: 'center', marginTop: spacing.md },
   link: { ...typography.caption, color: colors.primary },
+});
+
+// ── Web stiller (sadece web'de kullanılır) ────────────────────────────────
+const webStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+  },
+  brandPanel: {
+    width: '42%',
+    backgroundColor: colors.textPrimary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xxxl,
+    gap: spacing.xl,
+  },
+  brandName: {
+    ...typography.display,
+    color: colors.textOnPrimary,
+    fontSize: 40,
+    marginTop: spacing.md,
+  },
+  brandTagline: {
+    ...typography.subtitle,
+    color: colors.primaryLight,
+    textAlign: 'center',
+  },
+  featureCard: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    marginTop: spacing.lg,
+    gap: spacing.md,
+    alignSelf: 'stretch',
+  },
+  featureItem: {
+    ...typography.body,
+    color: 'rgba(255,255,255,0.75)',
+    lineHeight: 22,
+  },
+  formScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.xxxl,
+  },
+  formContent: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  formTagline: {
+    ...typography.title,
+    color: colors.textPrimary,
+    marginBottom: spacing.xl,
+  },
 });

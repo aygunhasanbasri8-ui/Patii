@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { HeaderHeightContext } from '@react-navigation/elements';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import * as api from './lib/api';
 import { ApiError } from './lib/api';
@@ -9,6 +10,8 @@ import { ApiError } from './lib/api';
 import { useAuth } from './hooks/useAuth';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { colors } from './theme/tokens';
+
+import WebSidebar from './components/WebSidebar';
 
 import AuthScreen from './screens/AuthScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -24,6 +27,7 @@ function showError(prefix, error) {
   const message = error instanceof ApiError ? error.message : error?.message || 'Bilinmeyen bir hata oluştu.';
   Alert.alert(prefix, message);
 }
+
 
 export default function Page() {
   const auth = useAuth();
@@ -51,6 +55,8 @@ export default function Page() {
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
+
+  const [webTab, setWebTab] = useState('home');
 
   const selectedPet = useMemo(() => pets[selected] || null, [pets, selected]);
   const isNewPet = !selectedPet?.id;
@@ -500,6 +506,87 @@ export default function Page() {
 
   const upcomingReminders = reminders;
 
+  // ── WEB: sidebar + içerik alanı ──────────────────────────────────────────
+  if (Platform.OS === 'web') {
+    return (
+      <View style={webDashStyles.root}>
+        <WebSidebar
+          activeTab={webTab}
+          onTabChange={setWebTab}
+          userName={userName}
+          onLogout={onLogout}
+        />
+        {/* HeaderHeightContext=0: useHeaderHeight() hook'unun navigator dışında crash etmesini önler */}
+        <HeaderHeightContext.Provider value={0}>
+        <View style={webDashStyles.content}>
+          {webTab === 'home' && (
+            <HomeScreen
+              userName={userName}
+              pets={pets}
+              selectedIndex={selected}
+              onSelectPet={setSelected}
+              selectedPet={selectedPet}
+              upcomingReminders={upcomingReminders}
+              refreshing={refreshing}
+              onRefresh={onRefreshDashboard}
+            />
+          )}
+          {webTab === 'profile' && (
+            <ProfileScreen
+              pets={pets}
+              selectedIndex={selected}
+              onSelectPet={setSelected}
+              draftPet={draftPet}
+              setDraftPet={setDraftPet}
+              onAddDraftPet={onAddDraftPet}
+              onSavePet={onSavePet}
+              onDeletePet={onDeletePet}
+              isNewPet={isNewPet}
+              loading={loading}
+            />
+          )}
+          {webTab === 'reminders' && (
+            <ReminderScreen
+              selectedPet={selectedPet}
+              reminders={reminders}
+              history={history}
+              historyLoaded={historyLoaded}
+              form={reminderForm}
+              setForm={setReminderForm}
+              onAdd={onAddReminder}
+              onUpdate={onUpdateReminder}
+              onCancelEdit={onCancelEditReminder}
+              editingId={editingReminderId}
+              onEdit={onEditReminder}
+              onDelete={onDeleteReminder}
+              onLoadHistory={onLoadHistory}
+              loading={loading}
+            />
+          )}
+          {webTab === 'analyze' && (
+            <AnalyzeScreen
+              selectedPet={selectedPet}
+              result={analyzeResult}
+              recordingState={recordingState}
+              onToggleRecording={onToggleRecording}
+            />
+          )}
+          {webTab === 'chat' && (
+            <ChatScreen
+              messages={messages}
+              prompt={prompt}
+              setPrompt={setPrompt}
+              onSend={onSendChat}
+              loading={loading}
+            />
+          )}
+        </View>
+        </HeaderHeightContext.Provider>
+      </View>
+    );
+  }
+
+  // ── MOBİL: Tab.Navigator (değişmedi) ──────────────────────────────────────
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -601,3 +688,16 @@ export default function Page() {
     </Tab.Navigator>
   );
 }
+
+const webDashStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+  },
+  content: {
+    flex: 1,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+});
