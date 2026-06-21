@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -9,8 +9,8 @@ router = APIRouter(prefix="/api")
 
 
 @router.post("/auth/register")
-def register(user: schemas.UserCreate, session: Session = Depends(db.get_db)):
-    return services.register_user(session, user)
+def register(user: schemas.UserCreate, bg: BackgroundTasks, session: Session = Depends(db.get_db)):
+    return services.register_user(session, user, bg)
 
 
 @router.post("/auth/verify-email")
@@ -19,8 +19,8 @@ def verify_email(payload: schemas.VerifyEmail, session: Session = Depends(db.get
 
 
 @router.post("/auth/resend-verification")
-def resend_verification(payload: schemas.ResendVerification, session: Session = Depends(db.get_db)):
-    return services.resend_verification_code(session, payload)
+def resend_verification(payload: schemas.ResendVerification, bg: BackgroundTasks, session: Session = Depends(db.get_db)):
+    return services.resend_verification_code(session, payload, bg)
 
 
 @router.post("/auth/login")
@@ -29,8 +29,8 @@ def login(user_data: schemas.UserLogin, session: Session = Depends(db.get_db)):
 
 
 @router.post("/auth/forgot-password")
-def forgot_password(payload: schemas.ForgotPassword, session: Session = Depends(db.get_db)):
-    return services.request_password_reset(session, payload)
+def forgot_password(payload: schemas.ForgotPassword, bg: BackgroundTasks, session: Session = Depends(db.get_db)):
+    return services.request_password_reset(session, payload, bg)
 
 
 @router.post("/auth/reset-password")

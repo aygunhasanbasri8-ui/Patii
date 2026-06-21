@@ -24,7 +24,7 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
     msg.attach(MIMEText(html_content, "html", "utf-8"))
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
             smtp.starttls()
             smtp.login(gmail_address, gmail_password)
             smtp.sendmail(gmail_address, to_email, msg.as_bytes())

@@ -4,8 +4,11 @@ import random
 import time
 from datetime import datetime, timedelta
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
+
+# Railway ortamında SMTP bloklu olduğundan fallback her zaman etkin
+_RAILWAY = bool(os.getenv("RAILWAY_ENVIRONMENT"))
 
 from . import core, llm, mail, ml_model, repositories, schemas
 
@@ -18,7 +21,7 @@ _RESEND_COOLDOWN_SECONDS = 60
 _RESET_CODE_EXPIRE_MINUTES = 15
 
 
-def register_user(db: Session, payload: schemas.UserCreate) -> dict:
+def register_user(db: Session, payload: schemas.UserCreate, background_tasks: BackgroundTasks | None = None) -> dict:
     db_user = repositories.get_user_by_email(db, payload.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı!")
@@ -33,22 +36,23 @@ def register_user(db: Session, payload: schemas.UserCreate) -> dict:
     code = f"{random.randint(0, 999999):06d}"
     repositories.update_user_verification(db, user, code, datetime.utcnow())
 
-    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
-    mail_sent = mail.send_email(
-        to_email=payload.email,
-        subject="Pati — E-posta Doğrulama",
-        html_content=(
-            f"<p>Merhaba {payload.full_name},</p>"
-            f"<p>Doğrulama kodun: <strong>{code}</strong></p>"
-            f"<p>Bu kodu uygulamaya girerek hesabını etkinleştir.</p>"
-        ),
+    html = (
+        f"<p>Merhaba {payload.full_name},</p>"
+        f"<p>Doğrulama kodun: <strong>{code}</strong></p>"
+        f"<p>Bu kodu uygulamaya girerek hesabını etkinleştir.</p>"
     )
+    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
+    if background_tasks is not None:
+        background_tasks.add_task(mail.send_email, payload.email, "Pati — E-posta Doğrulama", html)
+        mail_failed = _RAILWAY  # Railway'de SMTP bloklu, fallback her zaman göster
+    else:
+        mail_failed = not mail.send_email(payload.email, "Pati — E-posta Doğrulama", html)
 
     result = {
         "message": "Kayıt başarılı! E-postana gönderilen kodu girerek hesabını doğrula.",
         "user_id": user.id,
     }
-    if not mail_sent:
+    if mail_failed:
         result["verification_code_fallback"] = code
     return result
 
@@ -66,7 +70,7 @@ def verify_email_code(db: Session, payload: schemas.VerifyEmail) -> dict:
     return {"message": "E-posta başarıyla doğrulandı!"}
 
 
-def resend_verification_code(db: Session, payload: schemas.ResendVerification) -> dict:
+def resend_verification_code(db: Session, payload: schemas.ResendVerification, background_tasks: BackgroundTasks | None = None) -> dict:
     user = repositories.get_user_by_email(db, payload.email)
     if not user:
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
@@ -85,14 +89,16 @@ def resend_verification_code(db: Session, payload: schemas.ResendVerification) -
     code = f"{random.randint(0, 999999):06d}"
     repositories.update_user_verification(db, user, code, datetime.utcnow())
 
+    html = f"<p>Yeni doğrulama kodun: <strong>{code}</strong></p>"
     # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
-    mail_sent = mail.send_email(
-        to_email=payload.email,
-        subject="Pati — E-posta Doğrulama (Yeniden)",
-        html_content=f"<p>Yeni doğrulama kodun: <strong>{code}</strong></p>",
-    )
+    if background_tasks is not None:
+        background_tasks.add_task(mail.send_email, payload.email, "Pati — E-posta Doğrulama (Yeniden)", html)
+        mail_failed = _RAILWAY
+    else:
+        mail_failed = not mail.send_email(payload.email, "Pati — E-posta Doğrulama (Yeniden)", html)
+
     result = {"message": "Doğrulama kodu yeniden gönderildi."}
-    if not mail_sent:
+    if mail_failed:
         result["verification_code_fallback"] = code
     return result
 
@@ -114,22 +120,24 @@ def login_user(db: Session, payload: schemas.UserLogin) -> dict:
     }
 
 
-def request_password_reset(db: Session, payload: schemas.ForgotPassword) -> dict:
+def request_password_reset(db: Session, payload: schemas.ForgotPassword, background_tasks: BackgroundTasks | None = None) -> dict:
     user = repositories.get_user_by_email(db, payload.email)
     if user:
         code = f"{random.randint(0, 999999):06d}"
         expires_at = datetime.utcnow() + timedelta(minutes=_RESET_CODE_EXPIRE_MINUTES)
         repositories.update_user_reset_code(db, user, code, expires_at)
-        # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
-        mail_sent = mail.send_email(
-            to_email=payload.email,
-            subject="Pati — Şifre Sıfırlama",
-            html_content=(
-                f"<p>Şifre sıfırlama kodun: <strong>{code}</strong></p>"
-                f"<p>Bu kod {_RESET_CODE_EXPIRE_MINUTES} dakika geçerlidir.</p>"
-            ),
+        html = (
+            f"<p>Şifre sıfırlama kodun: <strong>{code}</strong></p>"
+            f"<p>Bu kod {_RESET_CODE_EXPIRE_MINUTES} dakika geçerlidir.</p>"
         )
-        if not mail_sent:
+        # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
+        if background_tasks is not None:
+            background_tasks.add_task(mail.send_email, payload.email, "Pati — Şifre Sıfırlama", html)
+            mail_failed = _RAILWAY
+        else:
+            mail_failed = not mail.send_email(payload.email, "Pati — Şifre Sıfırlama", html)
+
+        if mail_failed:
             return {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi.", "reset_code_fallback": code}
     return {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi."}
 

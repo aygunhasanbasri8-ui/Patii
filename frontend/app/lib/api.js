@@ -1,5 +1,6 @@
 export const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const DEFAULT_TIMEOUT_MS = 10000;
+const AUTH_TIMEOUT_MS = 20000;
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'unknown' } = {}) {
@@ -58,10 +59,10 @@ async function requestApi(path, options = {}, authToken = '', timeoutMs = DEFAUL
 
 // --- Auth -----------------------------------------------------------------
 export const register = (payload) =>
-  requestApi('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+  requestApi('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
 
 export const login = (payload) =>
-  requestApi('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+  requestApi('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
 
 export const addPet = (payload, token) =>
   requestApi('/api/pets/add', { method: 'POST', body: JSON.stringify(payload) }, token);
@@ -122,13 +123,13 @@ export const askChatbot = (payload, token) =>
 
 // --- Auth extended ------------------------------------------------------------
 export const verifyEmail = (payload) =>
-  requestApi('/api/auth/verify-email', { method: 'POST', body: JSON.stringify(payload) });
+  requestApi('/api/auth/verify-email', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
 
 export const resendVerification = (payload) =>
-  requestApi('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify(payload) });
+  requestApi('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
 
 export const forgotPassword = (payload) =>
-  requestApi('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(payload) });
+  requestApi('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
 
 export const resetPassword = (payload) =>
-  requestApi('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(payload) });
+  requestApi('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
