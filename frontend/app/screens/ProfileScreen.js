@@ -10,6 +10,16 @@ import PetSwitcher from '../components/PetSwitcher';
 import { EmptyState } from '../components/UI';
 import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
 
+export function toDraftPet(pet) {
+  return {
+    name: pet?.name || '',
+    species: pet?.species || '',
+    breed: pet?.breed || '',
+    avatar_type: pet?.avatar_type || null,
+    avatar_value: pet?.avatar_value || null,
+  };
+}
+
 function ReadOnlyProfileCard({ pet, onEdit }) {
   return (
     <View style={styles.profileCard}>
@@ -49,22 +59,11 @@ export default function ProfileScreen({
   const [editMode, setEditMode] = useState(false);
   const headerHeight = useHeaderHeight();
   const selectedPet = pets[selectedIndex];
-
-  const handleEdit = () => {
-    setEditMode(true);
-  };
+  const savedPets = pets.filter((p) => p.id);
 
   const handleCancelEdit = () => {
     setEditMode(false);
-    if (selectedPet) {
-      setDraftPet({
-        name: selectedPet.name || '',
-        species: selectedPet.species || '',
-        breed: selectedPet.breed || '',
-        avatar_type: selectedPet.avatar_type || null,
-        avatar_value: selectedPet.avatar_value || null,
-      });
-    }
+    if (selectedPet) setDraftPet(toDraftPet(selectedPet));
   };
 
   const handleSave = async () => {
@@ -84,25 +83,21 @@ export default function ProfileScreen({
         <Text style={styles.title}>Patilerim</Text>
         <Text style={styles.subtitle}>Profilleri yönet, yenisini ekle.</Text>
 
-        {/* Pati seçici — "+" yok, sadece mevcut patiler arası geçiş */}
-        {pets.filter((p) => p.id).length > 0 ? (
+        {savedPets.length > 0 ? (
           <PetSwitcher
-            pets={pets.filter((p) => p.id)}
+            pets={savedPets}
             selectedIndex={selectedIndex}
             onSelect={(i) => {
               onSelectPet(i);
               setEditMode(false);
             }}
-            onAddPress={null}
           />
         ) : null}
 
-        {/* Salt-okunur profil kartı */}
         {!isNewPet && !editMode && selectedPet?.id ? (
-          <ReadOnlyProfileCard pet={selectedPet} onEdit={handleEdit} />
+          <ReadOnlyProfileCard pet={selectedPet} onEdit={() => setEditMode(true)} />
         ) : null}
 
-        {/* Form: yeni pati veya düzenleme modu */}
         {showForm ? (
           <View style={styles.formCard}>
             {isNewPet ? (
@@ -161,7 +156,7 @@ export default function ProfileScreen({
 
             {!isNewPet ? (
               <>
-                <View style={styles.actionDivider} />
+                <View style={styles.divider} />
                 <Button
                   title="Patiyi Sil"
                   variant="danger"
@@ -173,7 +168,6 @@ export default function ProfileScreen({
           </View>
         ) : null}
 
-        {/* Yeni Pati Ekle butonu — isNewPet veya editMode aktifken gizle */}
         {!isNewPet && !editMode ? (
           <TouchableOpacity style={styles.addPetCard} onPress={onAddDraftPet} activeOpacity={0.8}>
             <View style={styles.addPetIcon}>
@@ -239,7 +233,6 @@ const styles = StyleSheet.create({
   formTitle: { ...typography.subtitle, color: colors.textPrimary },
   cancelLink: { ...typography.bodyStrong, color: colors.textSecondary },
   divider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md },
-  actionDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md },
 
   addPetCard: {
     flexDirection: 'row',

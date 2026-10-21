@@ -4,13 +4,12 @@ import { colors, radius, spacing, typography } from '../theme/tokens';
 
 function speciesIcon(species) {
   const s = (species || '').toLowerCase();
-  if (s.includes('kedi')) return 'paw';
-  if (s.includes('köpek') || s.includes('kopek')) return 'paw';
+  // Kuş dışındaki her tür için pati ikonu yeterli
   if (s.includes('kuş') || s.includes('kus')) return 'logo-twitter';
   return 'paw';
 }
 
-export default function PetSwitcher({ pets, selectedIndex, onSelect, onAddPress }) {
+export default function PetSwitcher({ pets, selectedIndex, onSelect }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
       {pets.map((pet, i) => {
@@ -34,11 +33,6 @@ export default function PetSwitcher({ pets, selectedIndex, onSelect, onAddPress 
           </TouchableOpacity>
         );
       })}
-      {onAddPress ? (
-        <TouchableOpacity style={styles.addChip} onPress={onAddPress} activeOpacity={0.8}>
-          <Ionicons name="add" size={18} color={colors.primaryDark} />
-        </TouchableOpacity>
-      ) : null}
     </ScrollView>
   );
 }
@@ -60,15 +54,4 @@ const styles = StyleSheet.create({
   },
   chipText: { ...typography.bodyStrong, color: colors.primaryDark },
   chipTextActive: { color: colors.textOnPrimary },
-  addChip: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.circle,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-  },
 });
