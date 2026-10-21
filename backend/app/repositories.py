@@ -22,6 +22,7 @@ def update_user_verification(
 ) -> models.User:
     user.verification_code = code
     user.verification_code_sent_at = sent_at
+    user.failed_code_attempts = 0
     db.commit()
     db.refresh(user)
     return user
@@ -31,6 +32,7 @@ def mark_user_verified(db: Session, user: models.User) -> models.User:
     user.is_verified = True
     user.verification_code = None
     user.verification_code_sent_at = None
+    user.failed_code_attempts = 0
     db.commit()
     db.refresh(user)
     return user
@@ -41,6 +43,7 @@ def update_user_reset_code(
 ) -> models.User:
     user.reset_code = code
     user.reset_code_expires_at = expires_at
+    user.failed_code_attempts = 0
     db.commit()
     db.refresh(user)
     return user
@@ -50,9 +53,15 @@ def update_user_password(db: Session, user: models.User, hashed_password: str) -
     user.hashed_password = hashed_password
     user.reset_code = None
     user.reset_code_expires_at = None
+    user.failed_code_attempts = 0
     db.commit()
     db.refresh(user)
     return user
+
+
+def increment_failed_code_attempts(db: Session, user: models.User) -> None:
+    user.failed_code_attempts += 1
+    db.commit()
 
 
 def create_pet(
