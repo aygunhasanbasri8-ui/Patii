@@ -23,6 +23,8 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       GMAIL_ADDRESS: ${GMAIL_ADDRESS:-}
       GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      MAIL_SENDER: ${MAIL_SENDER:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
     volumes:
       - pati_uploads:/app/static/uploads
