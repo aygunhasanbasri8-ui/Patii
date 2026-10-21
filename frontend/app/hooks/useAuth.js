@@ -5,6 +5,7 @@ import * as api from '../lib/api';
 const AUTH_TOKEN_KEY = 'auth_token';
 const AUTH_USER_NAME_KEY = 'auth_user_name';
 const AUTH_USER_ID_KEY = 'auth_user_id';
+const AUTH_KEYS = [AUTH_TOKEN_KEY, AUTH_USER_NAME_KEY, AUTH_USER_ID_KEY];
 
 export function useAuth() {
   const [authToken, setAuthToken] = useState('');
@@ -12,11 +13,7 @@ export function useAuth() {
   const [userId, setUserId] = useState('');
 
   const restore = useCallback(async () => {
-    const [t, n, id] = await Promise.all([
-      AsyncStorage.getItem(AUTH_TOKEN_KEY),
-      AsyncStorage.getItem(AUTH_USER_NAME_KEY),
-      AsyncStorage.getItem(AUTH_USER_ID_KEY),
-    ]);
+    const [t, n, id] = await Promise.all(AUTH_KEYS.map((key) => AsyncStorage.getItem(key)));
     if (t && id) {
       setAuthToken(t);
       setUserName(n || '');
@@ -37,24 +34,21 @@ export function useAuth() {
     ]);
   }, []);
 
-  const login = useCallback(async (email, password, turnstile_token = null) => {
-    const data = await api.login({ email, password, turnstile_token });
+  const login = useCallback(async (email, password) => {
+    const data = await api.login({ email, password });
     const token = data.access_token || '';
     const id = String(data.user_id || '');
     await persistSession(token, data.user_name || '', id);
     return { token, userId: id };
   }, [persistSession]);
 
-  const register = useCallback(async (full_name, email, password, turnstile_token = null) => {
-    return api.register({ full_name, email, password, turnstile_token });
-  }, []);
+  const register = useCallback(
+    async (full_name, email, password) => api.register({ full_name, email, password }),
+    []
+  );
 
   const logout = useCallback(async () => {
-    await Promise.all([
-      AsyncStorage.removeItem(AUTH_TOKEN_KEY),
-      AsyncStorage.removeItem(AUTH_USER_NAME_KEY),
-      AsyncStorage.removeItem(AUTH_USER_ID_KEY),
-    ]);
+    await Promise.all(AUTH_KEYS.map((key) => AsyncStorage.removeItem(key)));
     setAuthToken('');
     setUserName('');
     setUserId('');

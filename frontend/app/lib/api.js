@@ -1,6 +1,8 @@
 export const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const DEFAULT_TIMEOUT_MS = 10000;
 const AUTH_TIMEOUT_MS = 20000;
+// Ses analizi model çıkarımı yüzünden uzun sürebiliyor
+const ANALYZE_TIMEOUT_MS = 25000;
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'unknown' } = {}) {
@@ -28,7 +30,6 @@ async function requestApi(path, options = {}, authToken = '', timeoutMs = DEFAUL
       ...options,
     });
   } catch (e) {
-    console.log('[requestApi] gerçek hata:', e?.name, e?.message, e);
     if (e.name === 'AbortError') {
       throw new ApiError('İstek zaman aşımına uğradı. Bağlantını kontrol edip tekrar dene.', { kind: 'timeout' });
     }
@@ -45,6 +46,7 @@ async function requestApi(path, options = {}, authToken = '', timeoutMs = DEFAUL
         msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
       }
     } catch (_e) {
+      // gövde JSON değilse varsayılan mesaj kalsın
     }
     throw new ApiError(msg, { status: response.status, kind: 'http' });
   }
@@ -57,21 +59,27 @@ async function requestApi(path, options = {}, authToken = '', timeoutMs = DEFAUL
   }
 }
 
+const sendJson = (method, path, payload, token = '', timeoutMs = DEFAULT_TIMEOUT_MS) =>
+  requestApi(path, { method, body: JSON.stringify(payload) }, token, timeoutMs);
+
+const authPost = (path, payload) => sendJson('POST', path, payload, '', AUTH_TIMEOUT_MS);
+
 // --- Auth -----------------------------------------------------------------
-export const register = (payload) =>
-  requestApi('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
+export const register = (payload) => authPost('/api/auth/register', payload);
+export const login = (payload) => authPost('/api/auth/login', payload);
+export const verifyEmail = (payload) => authPost('/api/auth/verify-email', payload);
+export const resendVerification = (payload) => authPost('/api/auth/resend-verification', payload);
+export const forgotPassword = (payload) => authPost('/api/auth/forgot-password', payload);
+export const resetPassword = (payload) => authPost('/api/auth/reset-password', payload);
 
-export const login = (payload) =>
-  requestApi('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
-
-export const addPet = (payload, token) =>
-  requestApi('/api/pets/add', { method: 'POST', body: JSON.stringify(payload) }, token);
+// --- Pets -----------------------------------------------------------------
+export const addPet = (payload, token) => sendJson('POST', '/api/pets/add', payload, token);
 
 export const getMyPets = (ownerId, token) =>
   requestApi(`/api/pets/my-pets/${ownerId}`, {}, token);
 
 export const updatePet = (petId, payload, token) =>
-  requestApi(`/api/pets/${petId}`, { method: 'PUT', body: JSON.stringify(payload) }, token);
+  sendJson('PUT', `/api/pets/${petId}`, payload, token);
 
 export const deletePet = (petId, token) =>
   requestApi(`/api/pets/${petId}`, { method: 'DELETE' }, token);
@@ -84,8 +92,9 @@ export const uploadPetAvatar = (petId, imageUri, token) => {
 };
 
 export const analyzeMeow = async (petId, token, audioUri = null) => {
+  const path = `/api/analyze/meow?pet_id=${petId}`;
   if (!audioUri) {
-    return requestApi(`/api/analyze/meow?pet_id=${petId}`, { method: 'POST' }, token, 25000);
+    return requestApi(path, { method: 'POST' }, token, ANALYZE_TIMEOUT_MS);
   }
   const formData = new FormData();
   if (audioUri instanceof Blob) {
@@ -96,20 +105,15 @@ export const analyzeMeow = async (petId, token, audioUri = null) => {
     // Native: expo-av'dan gelen dosya URI'si
     formData.append('audio', { uri: audioUri, name: 'meow.wav', type: 'audio/wav' });
   }
-  return requestApi(
-    `/api/analyze/meow?pet_id=${petId}`,
-    { method: 'POST', body: formData },
-    token,
-    25000
-  );
+  return requestApi(path, { method: 'POST', body: formData }, token, ANALYZE_TIMEOUT_MS);
 };
 
-// --- Reminders ------------------------------------------------------------------
+// --- Reminders ------------------------------------------------------------
 export const addReminder = (payload, token) =>
-  requestApi('/api/reminders/add', { method: 'POST', body: JSON.stringify(payload) }, token);
+  sendJson('POST', '/api/reminders/add', payload, token);
 
 export const updateReminder = (reminderId, payload, token) =>
-  requestApi(`/api/reminders/${reminderId}`, { method: 'PUT', body: JSON.stringify(payload) }, token);
+  sendJson('PUT', `/api/reminders/${reminderId}`, payload, token);
 
 export const getPetReminders = (petId, token) =>
   requestApi(`/api/reminders/pet/${petId}`, {}, token);
@@ -120,19 +124,6 @@ export const getPetReminderHistory = (petId, token) =>
 export const deleteReminder = (reminderId, token) =>
   requestApi(`/api/reminders/${reminderId}`, { method: 'DELETE' }, token);
 
-// --- Chatbot ------------------------------------------------------------------
+// --- Chatbot --------------------------------------------------------------
 export const askChatbot = (payload, token) =>
-  requestApi('/api/chatbot/ask', { method: 'POST', body: JSON.stringify(payload) }, token);
-
-// --- Auth extended ------------------------------------------------------------
-export const verifyEmail = (payload) =>
-  requestApi('/api/auth/verify-email', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
-
-export const resendVerification = (payload) =>
-  requestApi('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
-
-export const forgotPassword = (payload) =>
-  requestApi('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
-
-export const resetPassword = (payload) =>
-  requestApi('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(payload) }, '', AUTH_TIMEOUT_MS);
+  sendJson('POST', '/api/chatbot/ask', payload, token);
