@@ -7,18 +7,33 @@ from datetime import datetime, timedelta
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
+from . import core, llm, mail, ml_model, repositories, schemas
+
+logger = logging.getLogger(__name__)
+
 # Railway ortamında SMTP bloklu olduğundan fallback her zaman etkin
 _RAILWAY = bool(os.getenv("RAILWAY_ENVIRONMENT"))
-
-from . import core, llm, mail, ml_model, repositories, schemas
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _UPLOADS_DIR = os.path.join(_APP_DIR, "..", "static", "uploads")
 
-logger = logging.getLogger(__name__)
-
 _RESEND_COOLDOWN_SECONDS = 60
 _RESET_CODE_EXPIRE_MINUTES = 15
+
+
+def _generate_code() -> str:
+    return f"{random.randint(0, 999999):06d}"
+
+
+def _send_code_mail(
+    background_tasks: BackgroundTasks | None, to_email: str, subject: str, html: str
+) -> bool:
+    # True dönerse kod yanıtta fallback olarak gösterilmeli.
+    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
+    if background_tasks is not None:
+        background_tasks.add_task(mail.send_email, to_email, subject, html)
+        return _RAILWAY  # Railway'de SMTP bloklu, fallback her zaman göster
+    return not mail.send_email(to_email, subject, html)
 
 
 def register_user(db: Session, payload: schemas.UserCreate, background_tasks: BackgroundTasks | None = None) -> dict:
@@ -33,7 +48,7 @@ def register_user(db: Session, payload: schemas.UserCreate, background_tasks: Ba
         hashed_password=core.hash_password(payload.password),
     )
 
-    code = f"{random.randint(0, 999999):06d}"
+    code = _generate_code()
     repositories.update_user_verification(db, user, code, datetime.utcnow())
 
     html = (
@@ -41,12 +56,7 @@ def register_user(db: Session, payload: schemas.UserCreate, background_tasks: Ba
         f"<p>Doğrulama kodun: <strong>{code}</strong></p>"
         f"<p>Bu kodu uygulamaya girerek hesabını etkinleştir.</p>"
     )
-    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
-    if background_tasks is not None:
-        background_tasks.add_task(mail.send_email, payload.email, "Pati — E-posta Doğrulama", html)
-        mail_failed = _RAILWAY  # Railway'de SMTP bloklu, fallback her zaman göster
-    else:
-        mail_failed = not mail.send_email(payload.email, "Pati — E-posta Doğrulama", html)
+    mail_failed = _send_code_mail(background_tasks, payload.email, "Pati — E-posta Doğrulama", html)
 
     result = {
         "message": "Kayıt başarılı! E-postana gönderilen kodu girerek hesabını doğrula.",
@@ -86,16 +96,13 @@ def resend_verification_code(db: Session, payload: schemas.ResendVerification, b
                 detail=f"Lütfen {remaining} saniye bekleyip tekrar dene.",
             )
 
-    code = f"{random.randint(0, 999999):06d}"
+    code = _generate_code()
     repositories.update_user_verification(db, user, code, datetime.utcnow())
 
     html = f"<p>Yeni doğrulama kodun: <strong>{code}</strong></p>"
-    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
-    if background_tasks is not None:
-        background_tasks.add_task(mail.send_email, payload.email, "Pati — E-posta Doğrulama (Yeniden)", html)
-        mail_failed = _RAILWAY
-    else:
-        mail_failed = not mail.send_email(payload.email, "Pati — E-posta Doğrulama (Yeniden)", html)
+    mail_failed = _send_code_mail(
+        background_tasks, payload.email, "Pati — E-posta Doğrulama (Yeniden)", html
+    )
 
     result = {"message": "Doğrulama kodu yeniden gönderildi."}
     if mail_failed:
@@ -121,25 +128,22 @@ def login_user(db: Session, payload: schemas.UserLogin) -> dict:
 
 
 def request_password_reset(db: Session, payload: schemas.ForgotPassword, background_tasks: BackgroundTasks | None = None) -> dict:
+    # Kayıtlı olmayan e-postalar için de aynı mesaj dönüyor, hesap varlığı sızmasın
+    result = {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi."}
     user = repositories.get_user_by_email(db, payload.email)
-    if user:
-        code = f"{random.randint(0, 999999):06d}"
-        expires_at = datetime.utcnow() + timedelta(minutes=_RESET_CODE_EXPIRE_MINUTES)
-        repositories.update_user_reset_code(db, user, code, expires_at)
-        html = (
-            f"<p>Şifre sıfırlama kodun: <strong>{code}</strong></p>"
-            f"<p>Bu kod {_RESET_CODE_EXPIRE_MINUTES} dakika geçerlidir.</p>"
-        )
-        # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
-        if background_tasks is not None:
-            background_tasks.add_task(mail.send_email, payload.email, "Pati — Şifre Sıfırlama", html)
-            mail_failed = _RAILWAY
-        else:
-            mail_failed = not mail.send_email(payload.email, "Pati — Şifre Sıfırlama", html)
+    if not user:
+        return result
 
-        if mail_failed:
-            return {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi.", "reset_code_fallback": code}
-    return {"message": "Eğer bu e-posta kayıtlıysa, sıfırlama kodu gönderildi."}
+    code = _generate_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=_RESET_CODE_EXPIRE_MINUTES)
+    repositories.update_user_reset_code(db, user, code, expires_at)
+    html = (
+        f"<p>Şifre sıfırlama kodun: <strong>{code}</strong></p>"
+        f"<p>Bu kod {_RESET_CODE_EXPIRE_MINUTES} dakika geçerlidir.</p>"
+    )
+    if _send_code_mail(background_tasks, payload.email, "Pati — Şifre Sıfırlama", html):
+        result["reset_code_fallback"] = code
+    return result
 
 
 def reset_password(db: Session, payload: schemas.ResetPassword) -> dict:
@@ -160,6 +164,15 @@ def reset_password(db: Session, payload: schemas.ResetPassword) -> dict:
 def _get_user_from_token(db: Session, token: str):
     email = core.get_current_user_email(token)
     return repositories.get_user_by_email(db, email)
+
+
+def _get_owned_pet(db: Session, pet_id: int, user):
+    pet = repositories.get_pet_by_id(db, pet_id)
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
+    if pet.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
+    return pet
 
 
 def add_pet_for_owner(db: Session, payload: schemas.PetCreate, token: str) -> dict:
@@ -185,11 +198,7 @@ def get_owner_pets(db: Session, owner_id: int, token: str):
 
 def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, token: str) -> dict:
     user = _get_user_from_token(db, token)
-    pet = repositories.get_pet_by_id(db, pet_id)
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
-    if pet.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
+    pet = _get_owned_pet(db, pet_id, user)
     repositories.update_pet(
         db, pet,
         payload.name,
@@ -205,11 +214,7 @@ def upload_pet_avatar(
     db: Session, pet_id: int, token: str, file_bytes: bytes, filename: str
 ) -> dict:
     user = _get_user_from_token(db, token)
-    pet = repositories.get_pet_by_id(db, pet_id)
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
-    if pet.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
+    pet = _get_owned_pet(db, pet_id, user)
 
     os.makedirs(_UPLOADS_DIR, exist_ok=True)
     ext = os.path.splitext(filename)[1].lower() or ".jpg"
@@ -226,11 +231,7 @@ def upload_pet_avatar(
 
 def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:
     user = _get_user_from_token(db, token)
-    pet = repositories.get_pet_by_id(db, pet_id)
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
-    if pet.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
+    pet = _get_owned_pet(db, pet_id, user)
     repositories.delete_pet(db, pet)
     return {"message": "Pati silindi."}
 
@@ -330,8 +331,7 @@ def get_pet_reminder_history(db: Session, pet_id: int, token: str):
         except ValueError:
             return False
 
-    history = [rem for rem in reminders if is_past(rem.date)]
-    return history
+    return [rem for rem in reminders if is_past(rem.date)]
 
 
 def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.ReminderUpdate, token: str) -> dict:

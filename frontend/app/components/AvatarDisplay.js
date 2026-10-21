@@ -1,6 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { BACKEND_BASE_URL } from '../lib/api';
-import { colors, radius } from '../theme/tokens';
+import { colors } from '../theme/tokens';
 
 export default function AvatarDisplay({ avatarType, avatarValue, petName, size = 60, style }) {
   const letter = (petName || '?').charAt(0).toUpperCase();
@@ -21,14 +21,14 @@ export default function AvatarDisplay({ avatarType, avatarValue, petName, size =
 
   if (avatarType === 'icon' && avatarValue) {
     return (
-      <View style={[styles.base, styles.iconBg, circleStyle, style]}>
+      <View style={[styles.base, styles.softBg, circleStyle, style]}>
         <Text style={{ fontSize: size * 0.52, lineHeight: size * 0.7 }}>{avatarValue}</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.base, styles.letterBg, circleStyle, style]}>
+    <View style={[styles.base, styles.softBg, circleStyle, style]}>
       <Text style={[styles.letter, { fontSize: size * 0.4 }]}>{letter}</Text>
     </View>
   );
@@ -40,12 +40,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  iconBg: {
-    backgroundColor: colors.surfaceSoft,
-    borderWidth: 2,
-    borderColor: colors.primaryLight,
-  },
-  letterBg: {
+  softBg: {
     backgroundColor: colors.surfaceSoft,
     borderWidth: 2,
     borderColor: colors.primaryLight,

@@ -57,6 +57,6 @@ def startup():
         Base.metadata.create_all(bind=engine)
         logger.info("Veritabanı tabloları başarıyla oluşturuldu.")
     except Exception as exc:
-        logger.error(f"Tablo oluşturma hatası: {exc}")
+        logger.error("Tablo oluşturma hatası: %s", exc)
 
     load_model()

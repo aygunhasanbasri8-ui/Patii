@@ -8,6 +8,49 @@ import Input from '../components/Input';
 import PawMark from '../components/PawMark';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 
+const TAGLINES = {
+  login: 'Patilerin seni bekliyor.',
+  register: 'Aramıza katıl, bakımı kolaylaştır.',
+  verify: 'E-postanı doğrula.',
+  forgot: 'Şifreni sıfırla.',
+  reset: 'Yeni şifreni belirle.',
+};
+
+const EMPTY_REGISTER_FORM = { full_name: '', email: '', password: '', confirmPassword: '' };
+
+const EMAIL_INPUT_PROPS = {
+  label: 'E-posta',
+  placeholder: 'ornek@mail.com',
+  autoCapitalize: 'none',
+  keyboardType: 'email-address',
+};
+
+function TextLink({ label, onPress }) {
+  return (
+    <TouchableOpacity style={styles.linkRow} onPress={onPress}>
+      <Text style={styles.link}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// Mail gönderilemediğinde backend kodu yanıtta döndürüyor (Railway SMTP engeli)
+function FallbackCodeBox({ code }) {
+  if (!code) return null;
+  return (
+    <View style={styles.fallbackBox}>
+      <Text style={styles.fallbackText}>Mail gönderilemedi — demo kodu: {code}</Text>
+    </View>
+  );
+}
+
+function ModeTab({ label, active, onPress }) {
+  return (
+    <TouchableOpacity style={[styles.switchBtn, active && styles.switchBtnActive]} onPress={onPress}>
+      <Text style={[styles.switchText, active && styles.switchTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function AuthScreen({
   onLogin,
   onRegister,
@@ -30,9 +73,7 @@ export default function AuthScreen({
   const displayError = localError || error;
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({
-    full_name: '', email: '', password: '', confirmPassword: '',
-  });
+  const [registerForm, setRegisterForm] = useState(EMPTY_REGISTER_FORM);
   const [verifyEmail, setVerifyEmail] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
   const [verifyFallbackCode, setVerifyFallbackCode] = useState(null);
@@ -45,12 +86,7 @@ export default function AuthScreen({
 
   const showTabs = mode === 'login' || mode === 'register';
 
-  const tagline =
-    mode === 'register' ? 'Aramıza katıl, bakımı kolaylaştır.' :
-    mode === 'verify'   ? 'E-postanı doğrula.' :
-    mode === 'forgot'   ? 'Şifreni sıfırla.' :
-    mode === 'reset'    ? 'Yeni şifreni belirle.' :
-    'Patilerin seni bekliyor.';
+  const tagline = TAGLINES[mode] || TAGLINES.login;
 
   const handleRegisterSubmit = async () => {
     if (registerForm.password !== registerForm.confirmPassword) {
@@ -66,7 +102,7 @@ export default function AuthScreen({
     if (result) {
       setVerifyEmail(registerForm.email);
       setVerifyFallbackCode(result.verification_code_fallback ?? null);
-      setRegisterForm({ full_name: '', email: '', password: '', confirmPassword: '' });
+      setRegisterForm(EMPTY_REGISTER_FORM);
       setVerifyCode('');
       setMode('verify');
     }
@@ -110,7 +146,7 @@ export default function AuthScreen({
     }
   };
 
-  // Ortak form içeriği — hem mobile hem web'de aynı JSX kullanılır
+  // Form hem mobil hem web yerleşiminde ortak
   function renderFormContent() {
     return (
       <>
@@ -121,32 +157,15 @@ export default function AuthScreen({
         )}
         {showTabs && (
           <View style={styles.switchRow}>
-            <TouchableOpacity
-              style={[styles.switchBtn, mode === 'login' && styles.switchBtnActive]}
-              onPress={() => setMode('login')}
-            >
-              <Text style={[styles.switchText, mode === 'login' && styles.switchTextActive]}>
-                Giriş Yap
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.switchBtn, mode === 'register' && styles.switchBtnActive]}
-              onPress={() => setMode('register')}
-            >
-              <Text style={[styles.switchText, mode === 'register' && styles.switchTextActive]}>
-                Kayıt Ol
-              </Text>
-            </TouchableOpacity>
+            <ModeTab label="Giriş Yap" active={mode === 'login'} onPress={() => setMode('login')} />
+            <ModeTab label="Kayıt Ol" active={mode === 'register'} onPress={() => setMode('register')} />
           </View>
         )}
 
         {mode === 'login' && (
           <View>
             <Input
-              label="E-posta"
-              placeholder="ornek@mail.com"
-              autoCapitalize="none"
-              keyboardType="email-address"
+              {...EMAIL_INPUT_PROPS}
               value={loginForm.email}
               onChangeText={(v) => setLoginForm((p) => ({ ...p, email: v }))}
             />
@@ -163,12 +182,10 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={() => onLogin({ ...loginForm })}
             />
-            <TouchableOpacity
-              style={styles.linkRow}
+            <TextLink
+              label="Şifremi unuttum"
               onPress={() => { setForgotEmail(loginForm.email); setMode('forgot'); }}
-            >
-              <Text style={styles.link}>Şifremi unuttum</Text>
-            </TouchableOpacity>
+            />
           </View>
         )}
 
@@ -181,10 +198,7 @@ export default function AuthScreen({
               onChangeText={(v) => setRegisterForm((p) => ({ ...p, full_name: v }))}
             />
             <Input
-              label="E-posta"
-              placeholder="ornek@mail.com"
-              autoCapitalize="none"
-              keyboardType="email-address"
+              {...EMAIL_INPUT_PROPS}
               value={registerForm.email}
               onChangeText={(v) => setRegisterForm((p) => ({ ...p, email: v }))}
             />
@@ -216,11 +230,7 @@ export default function AuthScreen({
             <Text style={styles.infoText}>
               <Text style={styles.bold}>{verifyEmail}</Text> adresine 6 haneli bir doğrulama kodu gönderdik.
             </Text>
-            {verifyFallbackCode && (
-              <View style={styles.fallbackBox}>
-                <Text style={styles.fallbackText}>Mail gönderilemedi — demo kodu: {verifyFallbackCode}</Text>
-              </View>
-            )}
+            <FallbackCodeBox code={verifyFallbackCode} />
             <Input
               label="Doğrulama Kodu"
               placeholder="123456"
@@ -235,18 +245,17 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={handleVerifySubmit}
             />
-            <TouchableOpacity
-              style={styles.linkRow}
+            <TextLink
+              label="Kodu tekrar gönder"
               onPress={async () => {
                 const result = await onResendVerification({ email: verifyEmail });
                 if (result) setVerifyFallbackCode(result.verification_code_fallback ?? null);
               }}
-            >
-              <Text style={styles.link}>Kodu tekrar gönder</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.linkRow} onPress={() => { setVerifyFallbackCode(null); setMode('login'); }}>
-              <Text style={styles.link}>Giriş ekranına dön</Text>
-            </TouchableOpacity>
+            />
+            <TextLink
+              label="Giriş ekranına dön"
+              onPress={() => { setVerifyFallbackCode(null); setMode('login'); }}
+            />
           </View>
         )}
 
@@ -256,10 +265,7 @@ export default function AuthScreen({
               Kayıtlı e-posta adresini gir, şifre sıfırlama kodunu gönderelim.
             </Text>
             <Input
-              label="E-posta"
-              placeholder="ornek@mail.com"
-              autoCapitalize="none"
-              keyboardType="email-address"
+              {...EMAIL_INPUT_PROPS}
               value={forgotEmail}
               onChangeText={setForgotEmail}
             />
@@ -269,9 +275,7 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={handleForgotSubmit}
             />
-            <TouchableOpacity style={styles.linkRow} onPress={() => setMode('login')}>
-              <Text style={styles.link}>Giriş ekranına dön</Text>
-            </TouchableOpacity>
+            <TextLink label="Giriş ekranına dön" onPress={() => setMode('login')} />
           </View>
         )}
 
@@ -280,11 +284,7 @@ export default function AuthScreen({
             <Text style={styles.infoText}>
               <Text style={styles.bold}>{resetEmail}</Text> adresine gönderilen kodu ve yeni şifreni gir.
             </Text>
-            {resetFallbackCode && (
-              <View style={styles.fallbackBox}>
-                <Text style={styles.fallbackText}>Mail gönderilemedi — demo kodu: {resetFallbackCode}</Text>
-              </View>
-            )}
+            <FallbackCodeBox code={resetFallbackCode} />
             <Input
               label="Sıfırlama Kodu"
               placeholder="123456"
@@ -313,23 +313,17 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={handleResetSubmit}
             />
-            <TouchableOpacity style={styles.linkRow} onPress={() => { setResetFallbackCode(null); setMode('forgot'); }}>
-              <Text style={styles.link}>Yeni kod iste</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.linkRow} onPress={() => { setResetFallbackCode(null); setMode('login'); }}>
-              <Text style={styles.link}>Giriş ekranına dön</Text>
-            </TouchableOpacity>
+            <TextLink label="Yeni kod iste" onPress={() => { setResetFallbackCode(null); setMode('forgot'); }} />
+            <TextLink label="Giriş ekranına dön" onPress={() => { setResetFallbackCode(null); setMode('login'); }} />
           </View>
         )}
       </>
     );
   }
 
-  // ── WEB: split-screen layout ──────────────────────────────────────────────
   if (Platform.OS === 'web') {
     return (
       <View style={webStyles.container}>
-        {/* Sol panel: marka */}
         <View style={webStyles.brandPanel}>
           <PawMark size={72} />
           <Text style={webStyles.brandName}>Pati</Text>
@@ -343,7 +337,6 @@ export default function AuthScreen({
           </View>
         </View>
 
-        {/* Sağ panel: form */}
         <ScrollView
           contentContainerStyle={webStyles.formScroll}
           keyboardShouldPersistTaps="handled"
@@ -357,7 +350,6 @@ export default function AuthScreen({
     );
   }
 
-  // ── MOBİL: mevcut layout (değişmedi) ─────────────────────────────────────
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -372,7 +364,6 @@ export default function AuthScreen({
   );
 }
 
-// ── Mobil stiller (değişmedi) ─────────────────────────────────────────────
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   container: { flexGrow: 1, padding: spacing.xl, justifyContent: 'center' },
@@ -414,7 +405,6 @@ const styles = StyleSheet.create({
   fallbackText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
 });
 
-// ── Web stiller (sadece web'de kullanılır) ────────────────────────────────
 const webStyles = StyleSheet.create({
   container: {
     flex: 1,

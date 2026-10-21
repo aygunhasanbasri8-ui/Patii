@@ -41,12 +41,8 @@ class PetCreate(BaseModel):
     avatar_value: Optional[str] = None  # emoji or server path
 
 
-class PetUpdate(BaseModel):
-    name: str
-    species: str
-    breed: str
-    avatar_type: Optional[str] = None
-    avatar_value: Optional[str] = None
+class PetUpdate(PetCreate):
+    pass
 
 
 class PetResponse(BaseModel):

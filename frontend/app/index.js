@@ -15,19 +15,42 @@ import WebSidebar from './components/WebSidebar';
 
 import AuthScreen from './screens/AuthScreen';
 import HomeScreen from './screens/HomeScreen';
-import ProfileScreen from './screens/ProfileScreen';
+import ProfileScreen, { toDraftPet } from './screens/ProfileScreen';
 import ReminderScreen, { isValidReminderDate } from './screens/ReminderScreen';
 import AnalyzeScreen from './screens/AnalyzeScreen';
 import ChatScreen from './screens/ChatScreen';
 
 const Tab = createBottomTabNavigator();
-const EMPTY_DRAFT_PET = { name: '', species: '', breed: '', avatar_type: null, avatar_value: null };
+const EMPTY_DRAFT_PET = toDraftPet(null);
+const EMPTY_REMINDER_FORM = { title: '', description: '', remind_at: '' };
 
-function showError(prefix, error) {
-  const message = error instanceof ApiError ? error.message : error?.message || 'Bilinmeyen bir hata oluştu.';
-  Alert.alert(prefix, message);
+const TAB_ICONS = {
+  'Ana Sayfa': 'home',
+  Profil: 'person',
+  'Hatırlatıcı': 'notifications',
+  Analiz: 'mic',
+};
+
+function getErrorMessage(error) {
+  return error instanceof ApiError ? error.message : error?.message || 'Bilinmeyen bir hata oluştu.';
 }
 
+function showError(prefix, error) {
+  Alert.alert(prefix, getErrorMessage(error));
+}
+
+// Boş alan ya da hatalı tarih varsa uyarıyı gösterip false döner
+function validateReminderForm({ title, description, remind_at }) {
+  if (!title.trim() || !description.trim() || !remind_at.trim()) {
+    Alert.alert('Eksik alan', 'Tüm alanları doldurmalısın.');
+    return false;
+  }
+  if (!isValidReminderDate(remind_at.trim())) {
+    Alert.alert('Geçersiz tarih', 'Tarihi gg/aa/yyyy formatında gir. Örn: 15/04/2026');
+    return false;
+  }
+  return true;
+}
 
 export default function Page() {
   const auth = useAuth();
@@ -47,7 +70,7 @@ export default function Page() {
   const [reminders, setReminders] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [reminderForm, setReminderForm] = useState({ title: '', description: '', remind_at: '' });
+  const [reminderForm, setReminderForm] = useState(EMPTY_REMINDER_FORM);
   const [editingReminderId, setEditingReminderId] = useState(null);
 
   const [analyzeResult, setAnalyzeResult] = useState(null);
@@ -62,7 +85,6 @@ export default function Page() {
   const selectedPet = useMemo(() => pets[selected] || null, [pets, selected]);
   const isNewPet = !selectedPet?.id;
 
-  // --- Veri çekme yardımcıları ----------------------------------------------
   const fetchPets = useCallback(async (token = authToken, uid = userId) => {
     if (!token || !uid) return;
     const data = await api.getMyPets(uid, token);
@@ -76,7 +98,7 @@ export default function Page() {
     setReminders(Array.isArray(data) ? data : []);
   }, [selectedPet?.id, authToken]);
 
-  // --- Açılış: oturum geri yükle ----------------------------------------------
+  // Açılışta kayıtlı oturumu geri yükle
   useEffect(() => {
     const init = async () => {
       try {
@@ -97,7 +119,7 @@ export default function Page() {
     setHistory([]);
     setHistoryLoaded(false);
     setEditingReminderId(null);
-    setReminderForm({ title: '', description: '', remind_at: '' });
+    setReminderForm(EMPTY_REMINDER_FORM);
     if (selectedPet?.id && authToken) {
       fetchReminders().catch((e) => showError('Hata', e));
     } else {
@@ -105,17 +127,11 @@ export default function Page() {
     }
   }, [selectedPet?.id, authToken, fetchReminders]);
 
+  // selectedPet nesnesine değil alanlarına bağlı: liste yenilenince düzenlenen form ezilmesin
   useEffect(() => {
-    setDraftPet({
-      name: selectedPet?.name || '',
-      species: selectedPet?.species || '',
-      breed: selectedPet?.breed || '',
-      avatar_type: selectedPet?.avatar_type || null,
-      avatar_value: selectedPet?.avatar_value || null,
-    });
-  }, [selected, selectedPet?.name, selectedPet?.species, selectedPet?.breed,
+    setDraftPet(toDraftPet(selectedPet));
+  }, [selected, selectedPet?.name, selectedPet?.species, selectedPet?.breed, // eslint-disable-line react-hooks/exhaustive-deps
       selectedPet?.avatar_type, selectedPet?.avatar_value]);
-
 
   useEffect(() => {
     if (recordingState === 'recording') {
@@ -123,34 +139,36 @@ export default function Page() {
       setRecordingState('idle');
     }
     setAnalyzeResult(null);
-    
   }, [selected]);
 
   const clearAuthError = useCallback(() => setAuthError(null), []);
 
-  const _authErr = (e) => {
-    setAuthError(e instanceof ApiError ? e.message : e?.message || 'Bilinmeyen bir hata oluştu.');
-  };
-
-  // --- Auth handlers -----------------------------------------------------------
-  const onLogin = async ({ email, password, turnstile_token }) => {
-    setAuthError(null);
-    if (!email.trim() || !password) {
-      setAuthError('E-posta ve şifre girmelisin.');
-      return;
-    }
+  // Hata olursa kutuda gösterilir, çağırana fallback döner
+  const runAuthAction = async (action, fallback) => {
     try {
       setAuthLoading(true);
-      const { token, userId: uid } = await auth.login(email.trim(), password, turnstile_token);
-      await fetchPets(token, uid);
+      return await action();
     } catch (e) {
-      _authErr(e);
+      setAuthError(getErrorMessage(e));
+      return fallback;
     } finally {
       setAuthLoading(false);
     }
   };
 
-  const onRegister = async ({ full_name, email, password, turnstile_token }) => {
+  const onLogin = async ({ email, password }) => {
+    setAuthError(null);
+    if (!email.trim() || !password) {
+      setAuthError('E-posta ve şifre girmelisin.');
+      return;
+    }
+    await runAuthAction(async () => {
+      const { token, userId: uid } = await auth.login(email.trim(), password);
+      await fetchPets(token, uid);
+    });
+  };
+
+  const onRegister = async ({ full_name, email, password }) => {
     setAuthError(null);
     if (!full_name.trim() || !email.trim() || !password) {
       setAuthError('Tüm alanları doldurmalısın.');
@@ -160,44 +178,23 @@ export default function Page() {
       setAuthError('Şifre en az 6 karakter olmalı.');
       return false;
     }
-    try {
-      setAuthLoading(true);
-      const data = await auth.register(full_name.trim(), email.trim(), password, turnstile_token);
-      return data ?? true;
-    } catch (e) {
-      _authErr(e);
-      return false;
-    } finally {
-      setAuthLoading(false);
-    }
+    return runAuthAction(
+      async () => (await auth.register(full_name.trim(), email.trim(), password)) ?? true,
+      false
+    );
   };
 
   const onVerifyEmail = async ({ email, code }) => {
     setAuthError(null);
-    try {
-      setAuthLoading(true);
+    return runAuthAction(async () => {
       await api.verifyEmail({ email, code });
       return true;
-    } catch (e) {
-      _authErr(e);
-      return false;
-    } finally {
-      setAuthLoading(false);
-    }
+    }, false);
   };
 
   const onResendVerification = async ({ email }) => {
     setAuthError(null);
-    try {
-      setAuthLoading(true);
-      const data = await api.resendVerification({ email });
-      return data;
-    } catch (e) {
-      _authErr(e);
-      return null;
-    } finally {
-      setAuthLoading(false);
-    }
+    return runAuthAction(() => api.resendVerification({ email }), null);
   };
 
   const onForgotPassword = async ({ email }) => {
@@ -206,30 +203,18 @@ export default function Page() {
       setAuthError('E-posta adresini girmelisin.');
       return false;
     }
-    try {
-      setAuthLoading(true);
-      const data = await api.forgotPassword({ email: email.trim() });
-      return data ?? true;
-    } catch (e) {
-      _authErr(e);
-      return false;
-    } finally {
-      setAuthLoading(false);
-    }
+    return runAuthAction(
+      async () => (await api.forgotPassword({ email: email.trim() })) ?? true,
+      false
+    );
   };
 
   const onResetPassword = async ({ email, code, new_password }) => {
     setAuthError(null);
-    try {
-      setAuthLoading(true);
+    return runAuthAction(async () => {
       await api.resetPassword({ email, code, new_password });
       return true;
-    } catch (e) {
-      _authErr(e);
-      return false;
-    } finally {
-      setAuthLoading(false);
-    }
+    }, false);
   };
 
   const onLogout = async () => {
@@ -255,7 +240,6 @@ export default function Page() {
     }
   };
 
-  // --- Pet handlers ---------------------------------------------------------------
   const onAddDraftPet = () => {
     const next = [...pets, { ...EMPTY_DRAFT_PET }];
     setPets(next);
@@ -346,28 +330,20 @@ export default function Page() {
     ]);
   };
 
-  // --- Reminder handlers -----------------------------------------------------------
   const onAddReminder = async () => {
     if (!selectedPet?.id) {
       Alert.alert('Uyarı', 'Önce bir pati seç.');
       return;
     }
+    if (!validateReminderForm(reminderForm)) return;
     const { title, description, remind_at } = reminderForm;
-    if (!title.trim() || !description.trim() || !remind_at.trim()) {
-      Alert.alert('Eksik alan', 'Tüm alanları doldurmalısın.');
-      return;
-    }
-    if (!isValidReminderDate(remind_at.trim())) {
-      Alert.alert('Geçersiz tarih', 'Tarihi gg/aa/yyyy formatında gir. Örn: 15/04/2026');
-      return;
-    }
     try {
       setLoading(true);
       await api.addReminder(
         { pet_id: selectedPet.id, title: title.trim(), description: description.trim(), remind_at: remind_at.trim() },
         authToken
       );
-      setReminderForm({ title: '', description: '', remind_at: '' });
+      setReminderForm(EMPTY_REMINDER_FORM);
       await fetchReminders();
     } catch (e) {
       showError('Hatırlatıcı hatası', e);
@@ -375,7 +351,6 @@ export default function Page() {
       setLoading(false);
     }
   };
-
 
   const onEditReminder = (reminder) => {
     const [title, ...rest] = reminder.text.split(': ');
@@ -389,20 +364,13 @@ export default function Page() {
 
   const onCancelEditReminder = () => {
     setEditingReminderId(null);
-    setReminderForm({ title: '', description: '', remind_at: '' });
+    setReminderForm(EMPTY_REMINDER_FORM);
   };
 
   const onUpdateReminder = async () => {
     if (!editingReminderId) return;
+    if (!validateReminderForm(reminderForm)) return;
     const { title, description, remind_at } = reminderForm;
-    if (!title.trim() || !description.trim() || !remind_at.trim()) {
-      Alert.alert('Eksik alan', 'Tüm alanları doldurmalısın.');
-      return;
-    }
-    if (!isValidReminderDate(remind_at.trim())) {
-      Alert.alert('Geçersiz tarih', 'Tarihi gg/aa/yyyy formatında gir. Örn: 15/04/2026');
-      return;
-    }
     try {
       setLoading(true);
       await api.updateReminder(
@@ -446,7 +414,6 @@ export default function Page() {
     }
   };
 
-
   const onToggleRecording = async () => {
     if (!selectedPet?.id) {
       Alert.alert('Uyarı', 'Önce bir pati seç.');
@@ -475,7 +442,6 @@ export default function Page() {
     }
   };
 
-  // --- Chat handler -----------------------------------------------------------------------
   const onSendChat = async () => {
     const text = prompt.trim();
     if (!text) return;
@@ -517,10 +483,66 @@ export default function Page() {
     );
   }
 
-  const upcomingReminders = reminders;
+  const homeProps = {
+    userName,
+    pets,
+    selectedIndex: selected,
+    onSelectPet: setSelected,
+    selectedPet,
+    upcomingReminders: reminders,
+    refreshing,
+    onRefresh: onRefreshDashboard,
+  };
+  const profileProps = {
+    pets,
+    selectedIndex: selected,
+    onSelectPet: setSelected,
+    draftPet,
+    setDraftPet,
+    onAddDraftPet,
+    onSavePet,
+    onDeletePet,
+    isNewPet,
+    loading,
+  };
+  const reminderProps = {
+    selectedPet,
+    reminders,
+    history,
+    historyLoaded,
+    form: reminderForm,
+    setForm: setReminderForm,
+    onAdd: onAddReminder,
+    onUpdate: onUpdateReminder,
+    onCancelEdit: onCancelEditReminder,
+    editingId: editingReminderId,
+    onEdit: onEditReminder,
+    onDelete: onDeleteReminder,
+    onLoadHistory,
+    loading,
+  };
+  const analyzeProps = {
+    selectedPet,
+    result: analyzeResult,
+    recordingState,
+    onToggleRecording,
+  };
+  const chatProps = {
+    messages,
+    prompt,
+    setPrompt,
+    onSend: onSendChat,
+    loading,
+  };
 
-  // ── WEB: sidebar + içerik alanı ──────────────────────────────────────────
   if (Platform.OS === 'web') {
+    const webScreens = {
+      home: <HomeScreen {...homeProps} />,
+      profile: <ProfileScreen {...profileProps} />,
+      reminders: <ReminderScreen {...reminderProps} />,
+      analyze: <AnalyzeScreen {...analyzeProps} />,
+      chat: <ChatScreen {...chatProps} />,
+    };
     return (
       <View style={webDashStyles.root}>
         <WebSidebar
@@ -531,86 +553,18 @@ export default function Page() {
         />
         {/* HeaderHeightContext=0: useHeaderHeight() hook'unun navigator dışında crash etmesini önler */}
         <HeaderHeightContext.Provider value={0}>
-        <View style={webDashStyles.content}>
-          {webTab === 'home' && (
-            <HomeScreen
-              userName={userName}
-              pets={pets}
-              selectedIndex={selected}
-              onSelectPet={setSelected}
-              selectedPet={selectedPet}
-              upcomingReminders={upcomingReminders}
-              refreshing={refreshing}
-              onRefresh={onRefreshDashboard}
-            />
-          )}
-          {webTab === 'profile' && (
-            <ProfileScreen
-              pets={pets}
-              selectedIndex={selected}
-              onSelectPet={setSelected}
-              draftPet={draftPet}
-              setDraftPet={setDraftPet}
-              onAddDraftPet={onAddDraftPet}
-              onSavePet={onSavePet}
-              onDeletePet={onDeletePet}
-              isNewPet={isNewPet}
-              loading={loading}
-            />
-          )}
-          {webTab === 'reminders' && (
-            <ReminderScreen
-              selectedPet={selectedPet}
-              reminders={reminders}
-              history={history}
-              historyLoaded={historyLoaded}
-              form={reminderForm}
-              setForm={setReminderForm}
-              onAdd={onAddReminder}
-              onUpdate={onUpdateReminder}
-              onCancelEdit={onCancelEditReminder}
-              editingId={editingReminderId}
-              onEdit={onEditReminder}
-              onDelete={onDeleteReminder}
-              onLoadHistory={onLoadHistory}
-              loading={loading}
-            />
-          )}
-          {webTab === 'analyze' && (
-            <AnalyzeScreen
-              selectedPet={selectedPet}
-              result={analyzeResult}
-              recordingState={recordingState}
-              onToggleRecording={onToggleRecording}
-            />
-          )}
-          {webTab === 'chat' && (
-            <ChatScreen
-              messages={messages}
-              prompt={prompt}
-              setPrompt={setPrompt}
-              onSend={onSendChat}
-              loading={loading}
-            />
-          )}
-        </View>
+          <View style={webDashStyles.content}>{webScreens[webTab]}</View>
         </HeaderHeightContext.Provider>
       </View>
     );
   }
 
-  // ── MOBİL: Tab.Navigator (değişmedi) ──────────────────────────────────────
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ color, size }) => {
-          const icon =
-            route.name === 'Ana Sayfa' ? 'home' :
-            route.name === 'Profil' ? 'person' :
-            route.name === 'Hatırlatıcı' ? 'notifications' :
-            route.name === 'Analiz' ? 'mic' : 'chatbubble';
-          return <Ionicons name={icon} size={size} color={color} />;
-        },
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={TAB_ICONS[route.name] || 'chatbubble'} size={size} color={color} />
+        ),
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         headerStyle: { backgroundColor: colors.primary },
@@ -623,81 +577,11 @@ export default function Page() {
         ),
       })}
     >
-      <Tab.Screen name="Ana Sayfa">
-        {() => (
-          <HomeScreen
-            userName={userName}
-            pets={pets}
-            selectedIndex={selected}
-            onSelectPet={setSelected}
-            selectedPet={selectedPet}
-            upcomingReminders={upcomingReminders}
-            refreshing={refreshing}
-            onRefresh={onRefreshDashboard}
-          />
-        )}
-      </Tab.Screen>
-
-      <Tab.Screen name="Profil">
-        {() => (
-          <ProfileScreen
-            pets={pets}
-            selectedIndex={selected}
-            onSelectPet={setSelected}
-            draftPet={draftPet}
-            setDraftPet={setDraftPet}
-            onAddDraftPet={onAddDraftPet}
-            onSavePet={onSavePet}
-            onDeletePet={onDeletePet}
-            isNewPet={isNewPet}
-            loading={loading}
-          />
-        )}
-      </Tab.Screen>
-
-      <Tab.Screen name="Hatırlatıcı">
-        {() => (
-          <ReminderScreen
-            selectedPet={selectedPet}
-            reminders={reminders}
-            history={history}
-            historyLoaded={historyLoaded}
-            form={reminderForm}
-            setForm={setReminderForm}
-            onAdd={onAddReminder}
-            onUpdate={onUpdateReminder}
-            onCancelEdit={onCancelEditReminder}
-            editingId={editingReminderId}
-            onEdit={onEditReminder}
-            onDelete={onDeleteReminder}
-            onLoadHistory={onLoadHistory}
-            loading={loading}
-          />
-        )}
-      </Tab.Screen>
-
-      <Tab.Screen name="Analiz">
-        {() => (
-          <AnalyzeScreen
-            selectedPet={selectedPet}
-            result={analyzeResult}
-            recordingState={recordingState}
-            onToggleRecording={onToggleRecording}
-          />
-        )}
-      </Tab.Screen>
-
-      <Tab.Screen name="Chat">
-        {() => (
-          <ChatScreen
-            messages={messages}
-            prompt={prompt}
-            setPrompt={setPrompt}
-            onSend={onSendChat}
-            loading={loading}
-          />
-        )}
-      </Tab.Screen>
+      <Tab.Screen name="Ana Sayfa">{() => <HomeScreen {...homeProps} />}</Tab.Screen>
+      <Tab.Screen name="Profil">{() => <ProfileScreen {...profileProps} />}</Tab.Screen>
+      <Tab.Screen name="Hatırlatıcı">{() => <ReminderScreen {...reminderProps} />}</Tab.Screen>
+      <Tab.Screen name="Analiz">{() => <AnalyzeScreen {...analyzeProps} />}</Tab.Screen>
+      <Tab.Screen name="Chat">{() => <ChatScreen {...chatProps} />}</Tab.Screen>
     </Tab.Navigator>
   );
 }
