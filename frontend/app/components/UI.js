@@ -1,9 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
-
-export function Card({ children, style, soft = false }) {
-  return <View style={[styles.card, soft && styles.cardSoft, style]}>{children}</View>;
-}
+import { colors, radius, spacing, typography } from '../theme/tokens';
 
 export function Badge({ label, tone = 'primary' }) {
   return (
@@ -33,17 +29,6 @@ export function SectionHeader({ title, action }) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadow.card,
-  },
-  cardSoft: {
-    backgroundColor: colors.surfaceSoft,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
   badge: {
     paddingHorizontal: spacing.md,
     paddingVertical: 5,

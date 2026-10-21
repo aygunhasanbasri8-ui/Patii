@@ -55,7 +55,6 @@ export default function HomeScreen({
 
       {pets.length > 0 ? (
         <>
-          {/* Büyük pati kartları — yatay kaydırmalı, "+" yok */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -142,7 +141,6 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     alignItems: 'center',
-    JustifyContent: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     paddingVertical: spacing.sm,
