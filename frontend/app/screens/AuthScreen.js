@@ -33,16 +33,6 @@ function TextLink({ label, onPress }) {
   );
 }
 
-// Mail gönderilemediğinde backend kodu yanıtta döndürüyor (Railway SMTP engeli)
-function FallbackCodeBox({ code }) {
-  if (!code) return null;
-  return (
-    <View style={styles.fallbackBox}>
-      <Text style={styles.fallbackText}>Mail gönderilemedi — demo kodu: {code}</Text>
-    </View>
-  );
-}
-
 function ModeTab({ label, active, onPress }) {
   return (
     <TouchableOpacity style={[styles.switchBtn, active && styles.switchBtnActive]} onPress={onPress}>
@@ -76,13 +66,11 @@ export default function AuthScreen({
   const [registerForm, setRegisterForm] = useState(EMPTY_REGISTER_FORM);
   const [verifyEmail, setVerifyEmail] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
-  const [verifyFallbackCode, setVerifyFallbackCode] = useState(null);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [resetPassword, setResetPassword] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
-  const [resetFallbackCode, setResetFallbackCode] = useState(null);
 
   const showTabs = mode === 'login' || mode === 'register';
 
@@ -101,7 +89,6 @@ export default function AuthScreen({
     });
     if (result) {
       setVerifyEmail(registerForm.email);
-      setVerifyFallbackCode(result.verification_code_fallback ?? null);
       setRegisterForm(EMPTY_REGISTER_FORM);
       setVerifyCode('');
       setMode('verify');
@@ -121,7 +108,6 @@ export default function AuthScreen({
     const result = await onForgotPassword({ email: forgotEmail });
     if (result) {
       setResetEmail(forgotEmail);
-      setResetFallbackCode(result.reset_code_fallback ?? null);
       setResetCode('');
       setResetPassword('');
       setResetConfirm('');
@@ -230,7 +216,6 @@ export default function AuthScreen({
             <Text style={styles.infoText}>
               <Text style={styles.bold}>{verifyEmail}</Text> adresine 6 haneli bir doğrulama kodu gönderdik.
             </Text>
-            <FallbackCodeBox code={verifyFallbackCode} />
             <Input
               label="Doğrulama Kodu"
               placeholder="123456"
@@ -247,14 +232,11 @@ export default function AuthScreen({
             />
             <TextLink
               label="Kodu tekrar gönder"
-              onPress={async () => {
-                const result = await onResendVerification({ email: verifyEmail });
-                if (result) setVerifyFallbackCode(result.verification_code_fallback ?? null);
-              }}
+              onPress={() => onResendVerification({ email: verifyEmail })}
             />
             <TextLink
               label="Giriş ekranına dön"
-              onPress={() => { setVerifyFallbackCode(null); setMode('login'); }}
+              onPress={() => setMode('login')}
             />
           </View>
         )}
@@ -284,7 +266,6 @@ export default function AuthScreen({
             <Text style={styles.infoText}>
               <Text style={styles.bold}>{resetEmail}</Text> adresine gönderilen kodu ve yeni şifreni gir.
             </Text>
-            <FallbackCodeBox code={resetFallbackCode} />
             <Input
               label="Sıfırlama Kodu"
               placeholder="123456"
@@ -313,8 +294,8 @@ export default function AuthScreen({
               style={{ marginTop: spacing.xl }}
               onPress={handleResetSubmit}
             />
-            <TextLink label="Yeni kod iste" onPress={() => { setResetFallbackCode(null); setMode('forgot'); }} />
-            <TextLink label="Giriş ekranına dön" onPress={() => { setResetFallbackCode(null); setMode('login'); }} />
+            <TextLink label="Yeni kod iste" onPress={() => setMode('forgot')} />
+            <TextLink label="Giriş ekranına dön" onPress={() => setMode('login')} />
           </View>
         )}
       </>
@@ -394,15 +375,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   errorText: { ...typography.caption, color: colors.dangerDark, fontWeight: '700' },
-  fallbackBox: {
-    backgroundColor: colors.warningSoft,
-    borderColor: colors.warning,
-    borderWidth: 1,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  fallbackText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
 });
 
 const webStyles = StyleSheet.create({

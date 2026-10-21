@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import secrets
 import time
 from datetime import datetime, timedelta
 
@@ -11,29 +12,35 @@ from . import core, llm, mail, ml_model, repositories, schemas
 
 logger = logging.getLogger(__name__)
 
-# Railway ortamında SMTP bloklu olduğundan fallback her zaman etkin
-_RAILWAY = bool(os.getenv("RAILWAY_ENVIRONMENT"))
-
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _UPLOADS_DIR = os.path.join(_APP_DIR, "..", "static", "uploads")
 
 _RESEND_COOLDOWN_SECONDS = 60
 _RESET_CODE_EXPIRE_MINUTES = 15
+# 6 haneli kodda sınırsız deneme, kodu dakikalar içinde tahmin ettirir
+_MAX_CODE_ATTEMPTS = 5
 
 
 def _generate_code() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def _send_code_mail(
     background_tasks: BackgroundTasks | None, to_email: str, subject: str, html: str
-) -> bool:
-    # True dönerse kod yanıtta fallback olarak gösterilmeli.
-    # GEÇİCİ: Railway SMTP kısıtlaması nedeniyle demo fallback, sonra kaldırılmalı
+) -> None:
+    # Kod asla yanıtta dönmez; mail gidemezse kullanıcı yeniden kod ister
     if background_tasks is not None:
         background_tasks.add_task(mail.send_email, to_email, subject, html)
-        return _RAILWAY  # Railway'de SMTP bloklu, fallback her zaman göster
-    return not mail.send_email(to_email, subject, html)
+    else:
+        mail.send_email(to_email, subject, html)
+
+
+def _check_code(db: Session, user, expected: str | None, given: str, wrong_detail: str) -> None:
+    if user.failed_code_attempts >= _MAX_CODE_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Çok fazla hatalı deneme. Lütfen yeni kod iste.")
+    if not expected or not secrets.compare_digest(expected, given):
+        repositories.increment_failed_code_attempts(db, user)
+        raise HTTPException(status_code=400, detail=wrong_detail)
 
 
 def register_user(db: Session, payload: schemas.UserCreate, background_tasks: BackgroundTasks | None = None) -> dict:
@@ -56,15 +63,12 @@ def register_user(db: Session, payload: schemas.UserCreate, background_tasks: Ba
         f"<p>Doğrulama kodun: <strong>{code}</strong></p>"
         f"<p>Bu kodu uygulamaya girerek hesabını etkinleştir.</p>"
     )
-    mail_failed = _send_code_mail(background_tasks, payload.email, "Pati — E-posta Doğrulama", html)
+    _send_code_mail(background_tasks, payload.email, "Pati — E-posta Doğrulama", html)
 
-    result = {
+    return {
         "message": "Kayıt başarılı! E-postana gönderilen kodu girerek hesabını doğrula.",
         "user_id": user.id,
     }
-    if mail_failed:
-        result["verification_code_fallback"] = code
-    return result
 
 
 def verify_email_code(db: Session, payload: schemas.VerifyEmail) -> dict:
@@ -73,8 +77,7 @@ def verify_email_code(db: Session, payload: schemas.VerifyEmail) -> dict:
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
     if user.is_verified:
         return {"message": "Hesap zaten doğrulanmış."}
-    if user.verification_code != payload.code:
-        raise HTTPException(status_code=400, detail="Doğrulama kodu yanlış.")
+    _check_code(db, user, user.verification_code, payload.code, "Doğrulama kodu yanlış.")
 
     repositories.mark_user_verified(db, user)
     return {"message": "E-posta başarıyla doğrulandı!"}
@@ -100,14 +103,9 @@ def resend_verification_code(db: Session, payload: schemas.ResendVerification, b
     repositories.update_user_verification(db, user, code, datetime.utcnow())
 
     html = f"<p>Yeni doğrulama kodun: <strong>{code}</strong></p>"
-    mail_failed = _send_code_mail(
-        background_tasks, payload.email, "Pati — E-posta Doğrulama (Yeniden)", html
-    )
+    _send_code_mail(background_tasks, payload.email, "Pati — E-posta Doğrulama (Yeniden)", html)
 
-    result = {"message": "Doğrulama kodu yeniden gönderildi."}
-    if mail_failed:
-        result["verification_code_fallback"] = code
-    return result
+    return {"message": "Doğrulama kodu yeniden gönderildi."}
 
 
 def login_user(db: Session, payload: schemas.UserLogin) -> dict:
@@ -134,6 +132,13 @@ def request_password_reset(db: Session, payload: schemas.ForgotPassword, backgro
     if not user:
         return result
 
+    # Kod yenilenince deneme hakkı da sıfırlandığı için sık istek tahmini kolaylaştırır.
+    # Bekleme süresinde aynı mesaj dönüyor ki hesabın varlığı anlaşılmasın.
+    if user.reset_code_expires_at:
+        sent_at = user.reset_code_expires_at - timedelta(minutes=_RESET_CODE_EXPIRE_MINUTES)
+        if (datetime.utcnow() - sent_at).total_seconds() < _RESEND_COOLDOWN_SECONDS:
+            return result
+
     code = _generate_code()
     expires_at = datetime.utcnow() + timedelta(minutes=_RESET_CODE_EXPIRE_MINUTES)
     repositories.update_user_reset_code(db, user, code, expires_at)
@@ -141,8 +146,7 @@ def request_password_reset(db: Session, payload: schemas.ForgotPassword, backgro
         f"<p>Şifre sıfırlama kodun: <strong>{code}</strong></p>"
         f"<p>Bu kod {_RESET_CODE_EXPIRE_MINUTES} dakika geçerlidir.</p>"
     )
-    if _send_code_mail(background_tasks, payload.email, "Pati — Şifre Sıfırlama", html):
-        result["reset_code_fallback"] = code
+    _send_code_mail(background_tasks, payload.email, "Pati — Şifre Sıfırlama", html)
     return result
 
 
@@ -150,8 +154,7 @@ def reset_password(db: Session, payload: schemas.ResetPassword) -> dict:
     user = repositories.get_user_by_email(db, payload.email)
     if not user or not user.reset_code:
         raise HTTPException(status_code=400, detail="Geçersiz sıfırlama isteği.")
-    if user.reset_code != payload.code:
-        raise HTTPException(status_code=400, detail="Sıfırlama kodu yanlış.")
+    _check_code(db, user, user.reset_code, payload.code, "Sıfırlama kodu yanlış.")
     if user.reset_code_expires_at and datetime.utcnow() > user.reset_code_expires_at:
         raise HTTPException(status_code=400, detail="Sıfırlama kodunun süresi dolmuş.")
     if len(payload.new_password) < 6:

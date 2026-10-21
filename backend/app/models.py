@@ -15,6 +15,7 @@ class User(Base):
     verification_code_sent_at = Column(DateTime, nullable=True)
     reset_code = Column(String, nullable=True)
     reset_code_expires_at = Column(DateTime, nullable=True)
+    failed_code_attempts = Column(Integer, nullable=False, default=0, server_default="0")
 
     pets = relationship("Pet", back_populates="owner")
 

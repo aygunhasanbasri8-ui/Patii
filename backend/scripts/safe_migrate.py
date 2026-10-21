@@ -24,6 +24,10 @@ from app.db import DATABASE_URL
 # Each entry: (revision_id, callable(inspector) -> bool)
 REVISION_CHECKPOINTS = [
     (
+        "c51e8a2f7d03",
+        lambda insp: _has_column(insp, "users", "failed_code_attempts"),
+    ),
+    (
         "a3f7c2d94b81",
         lambda insp: _has_column(insp, "users", "is_verified"),
     ),
