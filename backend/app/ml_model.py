@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +18,7 @@ SAMPLE_RATE = 22050
 DURATION_SECONDS = 3.0
 N_MELS = 64
 FIXED_LEN = int(SAMPLE_RATE * DURATION_SECONDS)
+LOW_CONFIDENCE_THRESHOLD = 0.45
 
 LABEL_DISPLAY = {
     "Ac": {
@@ -29,7 +33,6 @@ LABEL_DISPLAY = {
         "result": "Sakinim, kendimi iyi hissediyorum.",
         "advice": "Her şey yolunda görünüyor, böyle devam edebilirsin.",
     },
-
     "KediDegil": {
         "result": "Bu bir kedi miyavlaması gibi görünmüyor.",
         "advice": "Net bir kedi sesi kaydedip tekrar dener misin? Ortamın sessiz olması doğruluğu artırır.",
@@ -55,7 +58,7 @@ def load_model() -> None:
         return
 
     try:
-
+        # tensorflow ağır, sadece model dosyası varken yükleniyor
         import tensorflow as tf
 
         _model = tf.keras.models.load_model(str(MODEL_PATH))
@@ -73,10 +76,6 @@ def load_model() -> None:
 
 
 def _extract_melspectrogram(file_bytes: bytes) -> np.ndarray:
-    import os
-    import subprocess
-    import tempfile
-
     import librosa
 
     # ffmpeg doğrudan çağrılıyor: CAF/M4A/AAC/WAV tüm formatları için
@@ -87,7 +86,6 @@ def _extract_melspectrogram(file_bytes: bytes) -> np.ndarray:
     try:
         with open(in_path, "wb") as f:
             f.write(file_bytes)
-        import shutil
         ffmpeg_bin = shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
         try:
             subprocess.run(
@@ -119,9 +117,6 @@ def _extract_melspectrogram(file_bytes: bytes) -> np.ndarray:
     mel_db = librosa.power_to_db(mel, ref=np.max)
     mel_norm = (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-9)
     return mel_norm.astype(np.float32)
-
-
-LOW_CONFIDENCE_THRESHOLD = 0.45
 
 
 def predict_from_audio(file_bytes: bytes) -> dict:

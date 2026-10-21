@@ -10,7 +10,6 @@ _client_init_attempted = False
 
 
 def _get_client():
-
     global _client, _client_init_attempted
 
     if _client is not None:
