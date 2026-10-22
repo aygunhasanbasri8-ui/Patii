@@ -5,4 +5,5 @@ venv/
 pati.db
 test.db
 .pytest_cache/
-htmlcov/
+htmlcov/static/uploads/
+.env

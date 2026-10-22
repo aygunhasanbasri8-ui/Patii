@@ -23,21 +23,23 @@ geliştirebilmek için bilerek böyle.
 
 ## Çalıştırma
 
-Kök dizine bir `.env` koy:
-
-```
-POSTGRES_PASSWORD=...
-JWT_SECRET_KEY=...
-GEMINI_API_KEY=...        # opsiyonel
-BREVO_API_KEY=...         # mail gönderimi (Railway'de zorunlu)
-MAIL_SENDER=...
-GMAIL_ADDRESS=...         # Brevo yoksa yerelde SMTP ile gönderim
-GMAIL_APP_PASSWORD=...
-```
+Tek komutla backend, web arayüzü ve PostgreSQL kalkar. `.env` şart değil,
+anahtar vermek ya da port değiştirmek istersen örnekten kopyala:
 
 ```bash
+cp .env.example .env   # opsiyonel
 docker compose up --build
 ```
+
+`docker-compose.override.yml` otomatik devreye girer: `backend/` klasörü
+container'a bağlanır ve uvicorn `--reload` ile çalışır, kod değişince kendini
+yeniler. Override olmadan, canlıdaki gibi çalıştırmak için:
+
+```bash
+docker compose -f docker-compose.yml up --build
+```
+
+Makinede zaten 5432'yi kullanan bir PostgreSQL varsa `DB_PORT=5433` ver.
 
 | Servis | Adres |
 |--------|-------|
