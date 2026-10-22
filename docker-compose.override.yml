@@ -1,6 +1,6 @@
 services:
   backend:
-    command: ["./entrypoint.dev.sh"]
+    command: ["sh", "./entrypoint.dev.sh"]
     volumes:
       - ./backend:/app
       - pati_uploads:/app/static/uploads

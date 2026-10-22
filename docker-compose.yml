@@ -2,24 +2,32 @@ services:
   db:
     image: postgres:15
     container_name: pati_db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: chef
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pati}
       POSTGRES_DB: pati_db
     ports:
-      - "5432:5432"
+      # makinede zaten postgres varsa DB_PORT ile başka porta al
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chef -d pati_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   backend:
     build: ./backend
     container_name: pati_backend
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
-      DATABASE_URL: postgresql://chef:${POSTGRES_PASSWORD}@db:5432/pati_db
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      DATABASE_URL: postgresql://chef:${POSTGRES_PASSWORD:-pati}@db:5432/pati_db
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       GMAIL_ADDRESS: ${GMAIL_ADDRESS:-}
       GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
@@ -29,7 +37,14 @@ services:
     volumes:
       - pati_uploads:/app/static/uploads
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
   frontend:
     build:
@@ -37,12 +52,14 @@ services:
       args:
         EXPO_PUBLIC_BACKEND_URL: ${EXPO_PUBLIC_BACKEND_URL:-http://localhost:8000}
     container_name: pati_frontend
+    restart: unless-stopped
     environment:
       PORT: "8080"
     ports:
-      - "8081:8080"
+      - "${FRONTEND_PORT:-8081}:8080"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:
