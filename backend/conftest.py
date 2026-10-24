@@ -9,6 +9,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret-not-for-production")
 
 from app.db import get_db  # noqa: E402 — env var set edilmeden önce import olmamalı
 from app.models import Base, User  # noqa: E402
+from app.rate_limit import login_limiter  # noqa: E402
 from main import app  # noqa: E402
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
@@ -22,6 +23,11 @@ def setup_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_login_limiter():
+    login_limiter.clear()
 
 
 @pytest.fixture(autouse=True)

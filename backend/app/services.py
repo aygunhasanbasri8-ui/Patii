@@ -7,6 +7,7 @@ from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
 from . import core, llm, mail, ml_model, repositories, schemas, uploads
+from .rate_limit import login_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -103,10 +104,16 @@ def resend_verification_code(db: Session, payload: schemas.ResendVerification, b
     return {"message": "Doğrulama kodu yeniden gönderildi."}
 
 
-def login_user(db: Session, payload: schemas.UserLogin) -> dict:
+def login_user(db: Session, payload: schemas.UserLogin, client_ip: str = "unknown") -> dict:
+    # IP + e-posta birlikte anahtar: proxy IP'si yanlış çözülse bile başka hesaplar etkilenmez
+    limit_key = (client_ip, payload.email.strip().lower())
+    login_limiter.check(limit_key)
+
     user = repositories.get_user_by_email(db, payload.email)
     if not user or not core.verify_password(payload.password, user.hashed_password):
+        login_limiter.record_failure(limit_key)
         raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")
+    login_limiter.reset(limit_key)
 
     if not user.is_verified:
         raise HTTPException(status_code=403, detail="Lütfen önce e-postanı doğrula.")

@@ -1,8 +1,8 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Request, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from . import db, schemas, services, uploads
+from . import db, rate_limit, schemas, services, uploads
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 router = APIRouter(prefix="/api")
@@ -24,8 +24,8 @@ def resend_verification(payload: schemas.ResendVerification, bg: BackgroundTasks
 
 
 @router.post("/auth/login")
-def login(user_data: schemas.UserLogin, session: Session = Depends(db.get_db)):
-    return services.login_user(session, user_data)
+def login(user_data: schemas.UserLogin, request: Request, session: Session = Depends(db.get_db)):
+    return services.login_user(session, user_data, rate_limit.client_ip(request))
 
 
 @router.post("/auth/forgot-password")

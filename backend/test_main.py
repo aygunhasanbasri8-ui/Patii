@@ -65,6 +65,36 @@ class TestLogin:
         })
         assert response.status_code == 401
 
+    def test_login_locks_after_repeated_failures(self, client, registered_user):
+        wrong = {"email": registered_user["email"], "password": "yanlis"}
+        for _ in range(5):
+            assert client.post("/api/auth/login", json=wrong).status_code == 401
+
+        # Doğru parola bile kilitliyken geçmemeli
+        locked = client.post("/api/auth/login", json=registered_user)
+        assert locked.status_code == 429
+        assert int(locked.headers["Retry-After"]) > 0
+
+    def test_login_limit_is_per_ip_and_email(self, client, registered_user):
+        wrong = {"email": registered_user["email"], "password": "yanlis"}
+        for _ in range(5):
+            client.post("/api/auth/login", json=wrong, headers={"X-Forwarded-For": "1.1.1.1"})
+
+        # Aynı hesap başka IP'den, ya da başka hesap aynı IP'den etkilenmemeli
+        other_ip = client.post("/api/auth/login", json=registered_user, headers={"X-Forwarded-For": "2.2.2.2"})
+        assert other_ip.status_code == 200
+        other_user = client.post("/api/auth/login", json={"email": "yok@example.com", "password": "x"},
+                                 headers={"X-Forwarded-For": "1.1.1.1"})
+        assert other_user.status_code == 401
+
+    def test_login_success_resets_failure_count(self, client, registered_user):
+        wrong = {"email": registered_user["email"], "password": "yanlis"}
+        for _ in range(4):
+            client.post("/api/auth/login", json=wrong)
+        assert client.post("/api/auth/login", json=registered_user).status_code == 200
+        for _ in range(4):
+            assert client.post("/api/auth/login", json=wrong).status_code == 401
+
 
 class TestPets:
     def test_add_pet(self, client, registered_user, auth_token):
