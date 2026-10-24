@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Request, UploadFi
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from . import db, models, rate_limit, schemas, services, uploads
+from . import db, models, notifications, rate_limit, schemas, services, uploads
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 router = APIRouter(prefix="/api")
@@ -156,6 +156,24 @@ def delete_reminder(
     user: models.User = Depends(get_current_user),
 ):
     return services.remove_reminder(session, rem_id, user)
+
+
+@router.post("/notifications/token")
+def register_push_token(
+    payload: schemas.PushTokenRegister,
+    session: Session = Depends(db.get_db),
+    user: models.User = Depends(get_current_user),
+):
+    return notifications.register_token(session, user, payload.token, payload.platform)
+
+
+@router.delete("/notifications/token")
+def unregister_push_token(
+    token: str,
+    session: Session = Depends(db.get_db),
+    user: models.User = Depends(get_current_user),
+):
+    return notifications.unregister_token(session, user, token)
 
 
 @router.post("/chatbot/ask")

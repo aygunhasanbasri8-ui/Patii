@@ -6,6 +6,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret-not-for-production")
+# TestClient startup'ı çalıştırıyor; testte arka plan zamanlayıcısı gerçek DB'ye bakmasın
+os.environ.setdefault("REMINDER_NOTIFICATIONS", "0")
 
 from app.db import get_db  # noqa: E402 — env var set edilmeden önce import olmamalı
 from app.models import Base, User  # noqa: E402

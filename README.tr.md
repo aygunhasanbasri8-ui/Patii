@@ -14,7 +14,9 @@ soruyorsun.
 
 - E-posta doğrulamalı kayıt, giriş ve şifre sıfırlama (JWT)
 - Pati ekleme, düzenleme, silme; ikon ya da fotoğraf avatarı
-- Hatırlatıcılar ve geçmişi
+- Hatırlatıcılar ve geçmişi; hatırlatıcı tekrarlanabiliyor (her gün, her hafta, her ay, 3 ayda bir, her yıl)
+- Push bildirimleri: hatırlatıcının günü gelince sunucu sahibin telefonlarına saat
+  09:00'da (Türkiye saati) Expo push bildirimi gönderiyor
 - Miyavlama analizi: ses ffmpeg ile çevrilip mel-spektrograma dönüştürülüyor,
   Keras modeli (`backend/app/ml_models/`) ruh hâlini tahmin ediyor
 - Gemini tabanlı chatbot
@@ -89,6 +91,9 @@ EXPO_PUBLIC_BACKEND_URL=http://<makinenin-ip>:8000 npx expo start
 | `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` | Brevo yoksa SMTP ile Gmail'den gönderim |
 | `ALLOWED_ORIGINS` | CORS origin'leri, virgülle ayrılır, varsayılan `*` |
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BASE_URL` | Pati fotoğraflarını yerel disk yerine S3 uyumlu nesne depolamada (Cloudflare R2, AWS S3, MinIO) tut; `S3_BUCKET` verilince dördü de gerekli |
+| `REMINDER_NOTIFICATIONS` | `0` günlük hatırlatıcı bildirimlerini kapatır (varsayılan açık) |
+| `REMINDER_NOTIFY_HOUR`, `REMINDER_TIMEZONE` | Bildirimlerin gittiği saat ve "bugün"ü belirleyen saat dilimi (varsayılan `9`, `Europe/Istanbul`) |
+| `EXPO_ACCESS_TOKEN` | İsteğe bağlı; yalnızca Expo projesinde push güvenliği açıksa gerekir |
 | `S3_ENDPOINT_URL`, `S3_REGION`, `S3_PREFIX` | İsteğe bağlı: R2/MinIO uç noktası (`https://<hesap>.r2.cloudflarestorage.com`), bölge (varsayılan `auto`), anahtar öneki (varsayılan `uploads`) |
 | `EXPO_PUBLIC_BACKEND_URL` | Frontend'in konuşacağı backend adresi |
 | `POSTGRES_PASSWORD`, `DB_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | Sadece Compose: veritabanı şifresi ve host portları |
@@ -108,6 +113,12 @@ değişkenlerini ver: fotoğraflar kovaya gider, veritabanına mutlak adresleri 
 alan adı). Geçişten önce yüklenenler `/static/uploads/...` yolunu korur. Yerine
 yenisi yüklenen, ikonla değiştirilen ya da silinen patinin fotoğrafı depodan da
 silinir.
+
+Push bildirimleri için cihaz tarafı bir kez ayarlanmalı: Android derlemeleri için
+FCM kimlik bilgileri EAS projesine yüklenmeli (`eas credentials`), iOS için APNs
+anahtarı. Expo Go ve web sürümü bildirim almıyor. Bildirim işi API sürecinin
+içinde çalışıyor ve 10 dakikada bir bakıyor; birden fazla replika varsa koşullu
+bir güncelleme her hatırlatıcının günde bir kez gitmesini sağlıyor.
 
 ## Test
 

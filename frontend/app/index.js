@@ -8,6 +8,7 @@ import * as api from './lib/api';
 import { ApiError } from './lib/api';
 
 import { useAuth } from './hooks/useAuth';
+import { usePushNotifications } from './hooks/usePushNotifications';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { colors } from './theme/tokens';
 
@@ -22,7 +23,7 @@ import ChatScreen from './screens/ChatScreen';
 
 const Tab = createBottomTabNavigator();
 const EMPTY_DRAFT_PET = toDraftPet(null);
-const EMPTY_REMINDER_FORM = { title: '', description: '', remind_at: '' };
+const EMPTY_REMINDER_FORM = { title: '', description: '', remind_at: '', repeat: null };
 
 const TAB_ICONS = {
   'Ana Sayfa': 'home',
@@ -55,6 +56,7 @@ function validateReminderForm({ title, description, remind_at }) {
 export default function Page() {
   const auth = useAuth();
   const { authToken, userName, userId } = auth;
+  const unregisterPush = usePushNotifications(authToken);
   const audioRecorder = useAudioRecorder();
 
   const [bootLoading, setBootLoading] = useState(true);
@@ -218,6 +220,7 @@ export default function Page() {
   };
 
   const onLogout = async () => {
+    await unregisterPush();
     await auth.logout();
     setPets([]);
     setSelected(0);
@@ -338,11 +341,14 @@ export default function Page() {
       return;
     }
     if (!validateReminderForm(reminderForm)) return;
-    const { title, description, remind_at } = reminderForm;
+    const { title, description, remind_at, repeat } = reminderForm;
     try {
       setLoading(true);
       await api.addReminder(
-        { pet_id: selectedPet.id, title: title.trim(), description: description.trim(), remind_at: remind_at.trim() },
+        {
+          pet_id: selectedPet.id, title: title.trim(), description: description.trim(),
+          remind_at: remind_at.trim(), repeat,
+        },
         authToken
       );
       setReminderForm(EMPTY_REMINDER_FORM);
@@ -360,6 +366,7 @@ export default function Page() {
       title: title || '',
       description: rest.join(': ') || '',
       remind_at: reminder.date || '',
+      repeat: reminder.repeat_rule || null,
     });
     setEditingReminderId(reminder.id);
   };
@@ -372,12 +379,12 @@ export default function Page() {
   const onUpdateReminder = async () => {
     if (!editingReminderId) return;
     if (!validateReminderForm(reminderForm)) return;
-    const { title, description, remind_at } = reminderForm;
+    const { title, description, remind_at, repeat } = reminderForm;
     try {
       setLoading(true);
       await api.updateReminder(
         editingReminderId,
-        { title: title.trim(), description: description.trim(), remind_at: remind_at.trim() },
+        { title: title.trim(), description: description.trim(), remind_at: remind_at.trim(), repeat },
         authToken
       );
       onCancelEditReminder();

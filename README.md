@@ -13,7 +13,9 @@ whatever comes to mind.
 
 - Registration with e-mail verification, login and password reset (JWT)
 - Add, edit and delete pets, with an icon or a photo avatar
-- Reminders and their history
+- Reminders and their history; a reminder can repeat (daily, weekly, monthly, every 3 months, yearly)
+- Push notifications: on the day a reminder is due the server sends an Expo push
+  notification to the owner's phones at 09:00 (Turkey time)
 - Meow analysis: the audio is converted with ffmpeg into a mel spectrogram and a
   Keras model (`backend/app/ml_models/`) predicts the mood
 - Gemini-based chatbot
@@ -87,6 +89,9 @@ EXPO_PUBLIC_BACKEND_URL=http://<your-machine-ip>:8000 npx expo start
 | `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` | Sending through Gmail SMTP when Brevo is not configured |
 | `ALLOWED_ORIGINS` | CORS origins, comma separated, defaults to `*` |
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BASE_URL` | Store avatar photos in S3-compatible object storage (Cloudflare R2, AWS S3, MinIO) instead of the local disk; all four are needed once `S3_BUCKET` is set |
+| `REMINDER_NOTIFICATIONS` | `0` turns the daily reminder notifications off (default on) |
+| `REMINDER_NOTIFY_HOUR`, `REMINDER_TIMEZONE` | Hour the notifications go out and the timezone that defines "today" (defaults `9`, `Europe/Istanbul`) |
+| `EXPO_ACCESS_TOKEN` | Optional; required only if push security is enabled for the Expo project |
 | `S3_ENDPOINT_URL`, `S3_REGION`, `S3_PREFIX` | Optional: endpoint for R2/MinIO (`https://<account>.r2.cloudflarestorage.com`), region (default `auto`), key prefix (default `uploads`) |
 | `EXPO_PUBLIC_BACKEND_URL` | Backend address the frontend talks to |
 | `POSTGRES_PASSWORD`, `DB_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | Compose only: database password and host ports |
@@ -106,6 +111,12 @@ URL (`S3_PUBLIC_BASE_URL` must serve the bucket publicly, e.g. an R2 public
 bucket or custom domain). Photos uploaded before the switch keep their
 `/static/uploads/...` path. A replaced photo, a photo swapped for an icon and the
 photo of a deleted pet are removed from storage.
+
+Push notifications need the device side set up once: Android builds need FCM
+credentials uploaded to the EAS project (`eas credentials`), iOS builds an APNs
+key. Expo Go and the web build do not receive them. The notification job runs
+inside the API process and checks every 10 minutes; if several replicas run, a
+conditional update makes sure each reminder is sent only once a day.
 
 ## Tests
 

@@ -129,8 +129,13 @@ def delete_pet(db: Session, pet: models.Pet) -> None:
     db.commit()
 
 
-def create_reminder(db: Session, pet_id: int, text: str, date: str) -> models.Reminder:
-    reminder = models.Reminder(text=text, date=date, pet_id=pet_id)
+def create_reminder(
+    db: Session, pet_id: int, text: str, date: str, *, due_date=None, repeat_rule=None
+) -> models.Reminder:
+    reminder = models.Reminder(
+        text=text, date=date, pet_id=pet_id, due_date=due_date,
+        repeat_rule=repeat_rule, repeat_start=due_date if repeat_rule else None,
+    )
     db.add(reminder)
     db.commit()
     db.refresh(reminder)
@@ -145,9 +150,17 @@ def get_reminder_by_id(db: Session, reminder_id: int) -> models.Reminder | None:
     return db.query(models.Reminder).filter(models.Reminder.id == reminder_id).first()
 
 
-def update_reminder(db: Session, reminder: models.Reminder, text: str, date: str) -> models.Reminder:
+def update_reminder(
+    db: Session, reminder: models.Reminder, text: str, date: str, *, due_date=None, repeat_rule=None
+) -> models.Reminder:
+    if reminder.due_date != due_date:
+        # Yeni tarih için yeniden bildirim gitsin
+        reminder.last_notified_on = None
     reminder.text = text
     reminder.date = date
+    reminder.due_date = due_date
+    reminder.repeat_rule = repeat_rule
+    reminder.repeat_start = due_date if repeat_rule else None
     db.commit()
     db.refresh(reminder)
     return reminder
@@ -156,3 +169,11 @@ def update_reminder(db: Session, reminder: models.Reminder, text: str, date: str
 def delete_reminder(db: Session, reminder: models.Reminder) -> None:
     db.delete(reminder)
     db.commit()
+
+
+def get_repeating_reminders_due_before(db: Session, day) -> list[models.Reminder]:
+    return (
+        db.query(models.Reminder)
+        .filter(models.Reminder.repeat_rule.isnot(None), models.Reminder.due_date < day)
+        .all()
+    )
