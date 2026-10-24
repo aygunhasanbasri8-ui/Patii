@@ -86,6 +86,8 @@ EXPO_PUBLIC_BACKEND_URL=http://<your-machine-ip>:8000 npx expo start
 | `BREVO_API_KEY`, `MAIL_SENDER` | Mail is sent over HTTP through Brevo; takes priority over Gmail when set |
 | `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` | Sending through Gmail SMTP when Brevo is not configured |
 | `ALLOWED_ORIGINS` | CORS origins, comma separated, defaults to `*` |
+| `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BASE_URL` | Store avatar photos in S3-compatible object storage (Cloudflare R2, AWS S3, MinIO) instead of the local disk; all four are needed once `S3_BUCKET` is set |
+| `S3_ENDPOINT_URL`, `S3_REGION`, `S3_PREFIX` | Optional: endpoint for R2/MinIO (`https://<account>.r2.cloudflarestorage.com`), region (default `auto`), key prefix (default `uploads`) |
 | `EXPO_PUBLIC_BACKEND_URL` | Backend address the frontend talks to |
 | `POSTGRES_PASSWORD`, `DB_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | Compose only: database password and host ports |
 
@@ -96,9 +98,14 @@ outbound SMTP, so the Gmail path does not work there: set `BREVO_API_KEY` and
 `MAIL_SENDER` (a sender address verified in Brevo), otherwise verification and
 reset codes never reach the user. Codes are never returned in the API response.
 
-Uploaded photos are written to `backend/static/uploads/`. Compose keeps them in
-a volume, but a Railway container's disk is ephemeral and the files are lost on
-redeploy unless a volume is mounted at that path.
+Uploaded photos are written to `backend/static/uploads/` by default. Compose
+keeps them in a volume, but a Railway container's disk is ephemeral and the files
+are lost on redeploy. Either mount a volume at that path or set the `S3_*`
+variables: photos then go to the bucket and the database stores their absolute
+URL (`S3_PUBLIC_BASE_URL` must serve the bucket publicly, e.g. an R2 public
+bucket or custom domain). Photos uploaded before the switch keep their
+`/static/uploads/...` path. A replaced photo, a photo swapped for an icon and the
+photo of a deleted pet are removed from storage.
 
 ## Tests
 

@@ -88,6 +88,8 @@ EXPO_PUBLIC_BACKEND_URL=http://<makinenin-ip>:8000 npx expo start
 | `BREVO_API_KEY`, `MAIL_SENDER` | Mail HTTP üzerinden Brevo ile gider; tanımlıysa Gmail'e göre önceliklidir |
 | `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` | Brevo yoksa SMTP ile Gmail'den gönderim |
 | `ALLOWED_ORIGINS` | CORS origin'leri, virgülle ayrılır, varsayılan `*` |
+| `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BASE_URL` | Pati fotoğraflarını yerel disk yerine S3 uyumlu nesne depolamada (Cloudflare R2, AWS S3, MinIO) tut; `S3_BUCKET` verilince dördü de gerekli |
+| `S3_ENDPOINT_URL`, `S3_REGION`, `S3_PREFIX` | İsteğe bağlı: R2/MinIO uç noktası (`https://<hesap>.r2.cloudflarestorage.com`), bölge (varsayılan `auto`), anahtar öneki (varsayılan `uploads`) |
 | `EXPO_PUBLIC_BACKEND_URL` | Frontend'in konuşacağı backend adresi |
 | `POSTGRES_PASSWORD`, `DB_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | Sadece Compose: veritabanı şifresi ve host portları |
 
@@ -98,9 +100,14 @@ kapatıyor, Gmail yolu orada çalışmaz: `BREVO_API_KEY` ve `MAIL_SENDER` (Brev
 doğrulanmış gönderici adresi) tanımlanmalı, yoksa doğrulama ve sıfırlama
 kodları kullanıcıya ulaşmaz. Kodlar hiçbir koşulda API yanıtında dönmez.
 
-Yüklenen fotoğraflar `backend/static/uploads/` altına yazılıyor. Compose bunları
-bir volume'da tutuyor, ama Railway container'ının diski kalıcı değil; o yola
-volume bağlanmadıkça her deploy'da dosyalar kayboluyor.
+Yüklenen fotoğraflar varsayılan olarak `backend/static/uploads/` altına yazılıyor.
+Compose bunları bir volume'da tutuyor, ama Railway container'ının diski kalıcı
+değil; her deploy'da dosyalar kayboluyor. Ya o yola volume bağla ya da `S3_*`
+değişkenlerini ver: fotoğraflar kovaya gider, veritabanına mutlak adresleri yazılır
+(`S3_PUBLIC_BASE_URL` kovayı herkese açık sunmalı, ör. R2 public bucket ya da özel
+alan adı). Geçişten önce yüklenenler `/static/uploads/...` yolunu korur. Yerine
+yenisi yüklenen, ikonla değiştirilen ya da silinen patinin fotoğrafı depodan da
+silinir.
 
 ## Test
 

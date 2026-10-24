@@ -256,11 +256,13 @@ export default function Page() {
       return;
     }
 
-    // Fotoğraf yerel URI ise ayrıca yüklenmesi gerekir
+    // Fotoğraf yerel URI ise ayrıca yüklenmesi gerekir. Sunucudaki fotoğraf ya
+    // göreli (/static/...) ya da nesne depolamadaysa mutlak http(s) adresidir.
     const isLocalPhoto =
       draftPet.avatar_type === 'photo' &&
       draftPet.avatar_value &&
-      !draftPet.avatar_value.startsWith('/static/');
+      !draftPet.avatar_value.startsWith('/static/') &&
+      !/^https?:\/\//.test(draftPet.avatar_value);
 
     try {
       setLoading(true);

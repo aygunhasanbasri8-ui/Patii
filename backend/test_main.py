@@ -168,6 +168,18 @@ class TestPets:
         assert data["avatar_value"].endswith(".jpg") and ".." not in data["avatar_value"]
         assert client.get(data["avatar_value"]).headers["x-content-type-options"] == "nosniff"
 
+    def test_old_avatar_file_is_removed(self, client, registered_user, auth_token):
+        pet_id = self._add_pet(client, auth_token)
+        first = self._upload(client, auth_token, pet_id, _image_bytes("JPEG")).json()["avatar_value"]
+        second = self._upload(client, auth_token, pet_id, _image_bytes("PNG")).json()["avatar_value"]
+
+        # Yeni fotoğraf eskisinin yerini alınca eski dosya diskte birikmesin
+        assert client.get(first).status_code == 404
+        assert client.get(second).status_code == 200
+
+        client.delete(f"/api/pets/{pet_id}", headers={"Authorization": f"Bearer {auth_token}"})
+        assert client.get(second).status_code == 404
+
     def test_upload_pet_avatar_strips_exif(self, client, registered_user, auth_token):
         pet_id = self._add_pet(client, auth_token)
         exif = Image.Exif()

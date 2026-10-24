@@ -210,6 +210,7 @@ def get_owner_pets(db: Session, owner_id: int, user: models.User):
 
 def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, user: models.User) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
+    previous = pet.avatar_value if pet.avatar_type == "photo" else None
     repositories.update_pet(
         db, pet,
         payload.name,
@@ -218,6 +219,9 @@ def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, u
         avatar_type=payload.avatar_type,
         avatar_value=payload.avatar_value,
     )
+    # Fotoğraftan ikona geçildiyse eski dosya artık kimseye ait değil
+    if previous and pet.avatar_value != previous:
+        uploads.delete_upload(previous)
     return {"message": "Pati bilgileri güncellendi.", "pet_id": pet.id}
 
 
@@ -225,14 +229,19 @@ def upload_pet_avatar(db: Session, pet_id: int, user: models.User, file_bytes: b
     pet = _get_owned_pet(db, pet_id, user)
 
     image_bytes, ext = uploads.sanitize_avatar(file_bytes)
+    previous = pet.avatar_value if pet.avatar_type == "photo" else None
     avatar_value = uploads.save_upload(image_bytes, f"pet_{pet_id}", ext)
     repositories.update_pet_avatar(db, pet, "photo", avatar_value)
+    # DB güncellendikten sonra; tersi olsaydı hata anında pati fotoğrafsız kalırdı
+    uploads.delete_upload(previous)
     return {"avatar_type": "photo", "avatar_value": avatar_value}
 
 
 def remove_pet_for_owner(db: Session, pet_id: int, user: models.User) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
+    photo = pet.avatar_value if pet.avatar_type == "photo" else None
     repositories.delete_pet(db, pet)
+    uploads.delete_upload(photo)
     return {"message": "Pati silindi."}
 
 
