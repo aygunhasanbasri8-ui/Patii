@@ -1,19 +1,15 @@
 import logging
-import os
 import random
 import secrets
-import time
 from datetime import datetime, timedelta
 
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, llm, mail, ml_model, repositories, schemas
+from . import core, llm, mail, ml_model, models, repositories, schemas, uploads
+from .rate_limit import login_limiter
 
 logger = logging.getLogger(__name__)
-
-_APP_DIR = os.path.dirname(os.path.abspath(__file__))
-_UPLOADS_DIR = os.path.join(_APP_DIR, "..", "static", "uploads")
 
 _RESEND_COOLDOWN_SECONDS = 60
 _RESET_CODE_EXPIRE_MINUTES = 15
@@ -108,10 +104,16 @@ def resend_verification_code(db: Session, payload: schemas.ResendVerification, b
     return {"message": "Doğrulama kodu yeniden gönderildi."}
 
 
-def login_user(db: Session, payload: schemas.UserLogin) -> dict:
+def login_user(db: Session, payload: schemas.UserLogin, client_ip: str = "unknown") -> dict:
+    # IP + e-posta birlikte anahtar: proxy IP'si yanlış çözülse bile başka hesaplar etkilenmez
+    limit_key = (client_ip, payload.email.strip().lower())
+    login_limiter.check(limit_key)
+
     user = repositories.get_user_by_email(db, payload.email)
     if not user or not core.verify_password(payload.password, user.hashed_password):
+        login_limiter.record_failure(limit_key)
         raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")
+    login_limiter.reset(limit_key)
 
     if not user.is_verified:
         raise HTTPException(status_code=403, detail="Lütfen önce e-postanı doğrula.")
@@ -164,9 +166,13 @@ def reset_password(db: Session, payload: schemas.ResetPassword) -> dict:
     return {"message": "Şifre başarıyla güncellendi."}
 
 
-def _get_user_from_token(db: Session, token: str):
+def get_user_from_token(db: Session, token: str):
     email = core.get_current_user_email(token)
-    return repositories.get_user_by_email(db, email)
+    user = repositories.get_user_by_email(db, email)
+    if not user:
+        # Token geçerli ama hesap silinmiş
+        raise HTTPException(status_code=401, detail="Geçersiz bilet , lütfen tekrar giriş yap!")
+    return user
 
 
 def _get_owned_pet(db: Session, pet_id: int, user):
@@ -178,8 +184,7 @@ def _get_owned_pet(db: Session, pet_id: int, user):
     return pet
 
 
-def add_pet_for_owner(db: Session, payload: schemas.PetCreate, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def add_pet_for_owner(db: Session, payload: schemas.PetCreate, user: models.User) -> dict:
     pet = repositories.create_pet(
         db=db,
         name=payload.name,
@@ -192,15 +197,18 @@ def add_pet_for_owner(db: Session, payload: schemas.PetCreate, token: str) -> di
     return {"message": f"{pet.name} güvenli şekilde eklendi!", "owner": user.email, "pet_id": pet.id}
 
 
-def get_owner_pets(db: Session, owner_id: int, token: str):
-    user = _get_user_from_token(db, token)
+def get_my_pets(db: Session, user: models.User):
+    return repositories.get_pets_by_owner(db, user.id)
+
+
+# Eski mobil sürümler bu yolu kullanıyor; yeni istemciler /pets/me'yi kullanmalı
+def get_owner_pets(db: Session, owner_id: int, user: models.User):
     if user.id != owner_id:
         raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
-    return repositories.get_pets_by_owner(db, owner_id)
+    return get_my_pets(db, user)
 
 
-def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, user: models.User) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
     repositories.update_pet(
         db, pet,
@@ -213,27 +221,16 @@ def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, t
     return {"message": "Pati bilgileri güncellendi.", "pet_id": pet.id}
 
 
-def upload_pet_avatar(
-    db: Session, pet_id: int, token: str, file_bytes: bytes, filename: str
-) -> dict:
-    user = _get_user_from_token(db, token)
+def upload_pet_avatar(db: Session, pet_id: int, user: models.User, file_bytes: bytes) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
 
-    os.makedirs(_UPLOADS_DIR, exist_ok=True)
-    ext = os.path.splitext(filename)[1].lower() or ".jpg"
-    safe_name = f"pet_{pet_id}_{int(time.time())}{ext}"
-    filepath = os.path.join(_UPLOADS_DIR, safe_name)
-
-    with open(filepath, "wb") as f:
-        f.write(file_bytes)
-
-    avatar_value = f"/static/uploads/{safe_name}"
+    image_bytes, ext = uploads.sanitize_avatar(file_bytes)
+    avatar_value = uploads.save_upload(image_bytes, f"pet_{pet_id}", ext)
     repositories.update_pet_avatar(db, pet, "photo", avatar_value)
     return {"avatar_type": "photo", "avatar_value": avatar_value}
 
 
-def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def remove_pet_for_owner(db: Session, pet_id: int, user: models.User) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
     repositories.delete_pet(db, pet)
     return {"message": "Pati silindi."}
@@ -254,11 +251,8 @@ def _contextual_uncertain_advice(db: Session, pet) -> str | None:
     return llm.generate_text(prompt, max_output_tokens=150)
 
 
-def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None = None) -> dict:
-    core.get_current_user_email(token)
-    pet = repositories.get_pet_by_id(db, pet_id)
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
+def analyze_meow(db: Session, pet_id: int, user: models.User, audio_bytes: bytes | None = None) -> dict:
+    pet = _get_owned_pet(db, pet_id, user)
 
     logger.info(
         "analyze_meow çağrıldı — audio_bytes: %s bayt, model_available: %s",
@@ -303,11 +297,8 @@ def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None
     }
 
 
-def add_reminder(db: Session, payload: schemas.ReminderCreate, token: str) -> dict:
-    core.get_current_user_email(token)
-    pet = repositories.get_pet_by_id(db, payload.pet_id)
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
+def add_reminder(db: Session, payload: schemas.ReminderCreate, user: models.User) -> dict:
+    _get_owned_pet(db, payload.pet_id, user)
 
     reminder = repositories.create_reminder(
         db=db,
@@ -318,13 +309,13 @@ def add_reminder(db: Session, payload: schemas.ReminderCreate, token: str) -> di
     return {"message": "Hatırlatıcı başarıyla kuruldu!", "reminder_id": reminder.id}
 
 
-def get_pet_reminders(db: Session, pet_id: int, token: str):
-    core.get_current_user_email(token)
+def get_pet_reminders(db: Session, pet_id: int, user: models.User):
+    _get_owned_pet(db, pet_id, user)
     return repositories.get_reminders_by_pet(db, pet_id)
 
 
-def get_pet_reminder_history(db: Session, pet_id: int, token: str):
-    core.get_current_user_email(token)
+def get_pet_reminder_history(db: Session, pet_id: int, user: models.User):
+    _get_owned_pet(db, pet_id, user)
     reminders = repositories.get_reminders_by_pet(db, pet_id)
     today = datetime.utcnow().date()
 
@@ -337,14 +328,11 @@ def get_pet_reminder_history(db: Session, pet_id: int, token: str):
     return [rem for rem in reminders if is_past(rem.date)]
 
 
-def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.ReminderUpdate, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.ReminderUpdate, user: models.User) -> dict:
     reminder = repositories.get_reminder_by_id(db, rem_id)
     if not reminder:
         raise HTTPException(status_code=404, detail="Hatırlatıcı bulunamadı!")
-    pet = repositories.get_pet_by_id(db, reminder.pet_id)
-    if pet.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
+    _get_owned_pet(db, reminder.pet_id, user)
     repositories.update_reminder(
         db,
         reminder,
@@ -354,11 +342,11 @@ def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.Reminde
     return {"message": "Hatırlatıcı güncellendi.", "reminder_id": reminder.id}
 
 
-def remove_reminder(db: Session, rem_id: int, token: str) -> dict:
-    core.get_current_user_email(token)
+def remove_reminder(db: Session, rem_id: int, user: models.User) -> dict:
     reminder = repositories.get_reminder_by_id(db, rem_id)
     if not reminder:
         raise HTTPException(status_code=404, detail="Hatırlatıcı zaten yok!")
+    _get_owned_pet(db, reminder.pet_id, user)
 
     repositories.delete_reminder(db, reminder)
     return {"message": "Hatırlatıcı silindi."}
@@ -399,8 +387,7 @@ def _keyword_fallback_answer(question: str) -> str:
     return _DEFAULT_ANSWER
 
 
-def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
-    core.get_current_user_email(token)
+def ask_chatbot(db: Session, payload: schemas.ChatAsk, user: models.User) -> dict:
 
     question = (payload.question or "").strip()
     if not question:
@@ -409,7 +396,8 @@ def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
     pet_context = ""
     if payload.pet_id is not None:
         pet = repositories.get_pet_by_id(db, payload.pet_id)
-        if pet:
+        # Başkasının patisinin bilgisi bağlama girmesin
+        if pet and pet.owner_id == user.id:
             pet_context = f"Kullanıcının patisi: {pet.name}, tür: {pet.species}, ırk: {pet.breed}.\n"
 
     prompt = f"{_SYSTEM_PROMPT_PREFIX}{pet_context}Kullanıcının sorusu: {question}"
