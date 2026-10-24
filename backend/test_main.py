@@ -3,6 +3,7 @@ import io
 from PIL import Image
 
 from app import uploads
+from app.models import User
 
 
 def _image_bytes(fmt: str) -> bytes:
@@ -476,3 +477,29 @@ class TestReminders:
         )
         assert history_resp.status_code == 200
         assert len(history_resp.json()) >= 1
+
+class TestOwnership:
+    def test_other_user_cannot_touch_pet_data(self, client, db_session, registered_user, auth_token):
+        owner_h = {"Authorization": f"Bearer {auth_token}"}
+        pet_id = client.post("/api/pets/add", json={"name": "Pamuk", "species": "Kedi", "breed": "Van"},
+                             headers=owner_h).json()["pet_id"]
+        rem_id = client.post("/api/reminders/add", json={
+            "pet_id": pet_id, "title": "Aşı", "description": "x", "remind_at": "01/01/2030",
+        }, headers=owner_h).json()["reminder_id"]
+
+        client.post("/api/auth/register", json={"full_name": "Baska", "email": "baska@example.com", "password": "pass1234"})
+        db_session.query(User).filter(User.email == "baska@example.com").update({"is_verified": True})
+        db_session.commit()
+        token = client.post("/api/auth/login", json={"email": "baska@example.com", "password": "pass1234"}).json()["access_token"]
+        other_h = {"Authorization": f"Bearer {token}"}
+
+        assert client.get(f"/api/reminders/pet/{pet_id}", headers=other_h).status_code == 403
+        assert client.get(f"/api/reminders/history/pet/{pet_id}", headers=other_h).status_code == 403
+        assert client.post("/api/reminders/add", json={
+            "pet_id": pet_id, "title": "x", "description": "x", "remind_at": "01/01/2030",
+        }, headers=other_h).status_code == 403
+        assert client.delete(f"/api/reminders/{rem_id}", headers=other_h).status_code == 403
+        assert client.post(f"/api/analyze/meow?pet_id={pet_id}", headers=other_h).status_code == 403
+
+        # Sahibi etkilenmemeli
+        assert client.get(f"/api/reminders/pet/{pet_id}", headers=owner_h).status_code == 200

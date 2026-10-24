@@ -168,7 +168,11 @@ def reset_password(db: Session, payload: schemas.ResetPassword) -> dict:
 
 def _get_user_from_token(db: Session, token: str):
     email = core.get_current_user_email(token)
-    return repositories.get_user_by_email(db, email)
+    user = repositories.get_user_by_email(db, email)
+    if not user:
+        # Token geçerli ama hesap silinmiş
+        raise HTTPException(status_code=401, detail="Geçersiz bilet , lütfen tekrar giriş yap!")
+    return user
 
 
 def _get_owned_pet(db: Session, pet_id: int, user):
@@ -248,10 +252,8 @@ def _contextual_uncertain_advice(db: Session, pet) -> str | None:
 
 
 def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None = None) -> dict:
-    core.get_current_user_email(token)
-    pet = repositories.get_pet_by_id(db, pet_id)
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
+    user = _get_user_from_token(db, token)
+    pet = _get_owned_pet(db, pet_id, user)
 
     logger.info(
         "analyze_meow çağrıldı — audio_bytes: %s bayt, model_available: %s",
@@ -297,10 +299,8 @@ def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None
 
 
 def add_reminder(db: Session, payload: schemas.ReminderCreate, token: str) -> dict:
-    core.get_current_user_email(token)
-    pet = repositories.get_pet_by_id(db, payload.pet_id)
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pati bulunamadı!")
+    user = _get_user_from_token(db, token)
+    _get_owned_pet(db, payload.pet_id, user)
 
     reminder = repositories.create_reminder(
         db=db,
@@ -312,12 +312,14 @@ def add_reminder(db: Session, payload: schemas.ReminderCreate, token: str) -> di
 
 
 def get_pet_reminders(db: Session, pet_id: int, token: str):
-    core.get_current_user_email(token)
+    user = _get_user_from_token(db, token)
+    _get_owned_pet(db, pet_id, user)
     return repositories.get_reminders_by_pet(db, pet_id)
 
 
 def get_pet_reminder_history(db: Session, pet_id: int, token: str):
-    core.get_current_user_email(token)
+    user = _get_user_from_token(db, token)
+    _get_owned_pet(db, pet_id, user)
     reminders = repositories.get_reminders_by_pet(db, pet_id)
     today = datetime.utcnow().date()
 
@@ -335,9 +337,7 @@ def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.Reminde
     reminder = repositories.get_reminder_by_id(db, rem_id)
     if not reminder:
         raise HTTPException(status_code=404, detail="Hatırlatıcı bulunamadı!")
-    pet = repositories.get_pet_by_id(db, reminder.pet_id)
-    if pet.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
+    _get_owned_pet(db, reminder.pet_id, user)
     repositories.update_reminder(
         db,
         reminder,
@@ -348,10 +348,11 @@ def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.Reminde
 
 
 def remove_reminder(db: Session, rem_id: int, token: str) -> dict:
-    core.get_current_user_email(token)
+    user = _get_user_from_token(db, token)
     reminder = repositories.get_reminder_by_id(db, rem_id)
     if not reminder:
         raise HTTPException(status_code=404, detail="Hatırlatıcı zaten yok!")
+    _get_owned_pet(db, reminder.pet_id, user)
 
     repositories.delete_reminder(db, reminder)
     return {"message": "Hatırlatıcı silindi."}
@@ -393,7 +394,7 @@ def _keyword_fallback_answer(question: str) -> str:
 
 
 def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
-    core.get_current_user_email(token)
+    user = _get_user_from_token(db, token)
 
     question = (payload.question or "").strip()
     if not question:
@@ -402,7 +403,8 @@ def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
     pet_context = ""
     if payload.pet_id is not None:
         pet = repositories.get_pet_by_id(db, payload.pet_id)
-        if pet:
+        # Başkasının patisinin bilgisi bağlama girmesin
+        if pet and pet.owner_id == user.id:
             pet_context = f"Kullanıcının patisi: {pet.name}, tür: {pet.species}, ırk: {pet.breed}.\n"
 
     prompt = f"{_SYSTEM_PROMPT_PREFIX}{pet_context}Kullanıcının sorusu: {question}"
