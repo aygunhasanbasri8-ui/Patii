@@ -108,6 +108,13 @@ export const analyzeMeow = async (petId, token, audioUri = null) => {
   return requestApi(path, { method: 'POST', body: formData }, token, ANALYZE_TIMEOUT_MS);
 };
 
+// --- Notifications --------------------------------------------------------
+export const registerPushToken = (token, platform, authToken) =>
+  sendJson('POST', '/api/notifications/token', { token, platform }, authToken);
+
+export const unregisterPushToken = (token, authToken) =>
+  requestApi(`/api/notifications/token?token=${encodeURIComponent(token)}`, { method: 'DELETE' }, authToken);
+
 // --- Reminders ------------------------------------------------------------
 export const addReminder = (payload, token) =>
   sendJson('POST', '/api/reminders/add', payload, token);

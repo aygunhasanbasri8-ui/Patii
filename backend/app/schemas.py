@@ -1,6 +1,8 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from .recurrence import normalize_rule
 
 
 class UserCreate(BaseModel):
@@ -57,19 +59,32 @@ class PetResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ReminderCreate(BaseModel):
+class _ReminderFields(BaseModel):
+    title: str
+    description: str
+    remind_at: str
+    # "FREQ=MONTHLY;INTERVAL=3" gibi; verilmezse tek seferlik (eski istemciler göndermiyor)
+    repeat: str | None = None
+
+    @field_validator("repeat")
+    @classmethod
+    def _valid_rule(cls, value: str | None) -> str | None:
+        return normalize_rule(value)
+
+
+class ReminderCreate(_ReminderFields):
     pet_id: int
-    title: str
-    description: str
-    remind_at: str
 
 
-class ReminderUpdate(BaseModel):
-    title: str
-    description: str
-    remind_at: str
+class ReminderUpdate(_ReminderFields):
+    pass
 
 
 class ChatAsk(BaseModel):
     question: str
     pet_id: int | None = None
+
+
+class PushTokenRegister(BaseModel):
+    token: str
+    platform: str | None = None

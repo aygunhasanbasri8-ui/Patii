@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, llm, mail, ml_model, models, repositories, schemas, uploads
+from . import core, llm, mail, ml_model, models, recurrence, repositories, schemas, uploads
 from .rate_limit import login_limiter
 
 logger = logging.getLogger(__name__)
@@ -314,27 +314,48 @@ def add_reminder(db: Session, payload: schemas.ReminderCreate, user: models.User
         pet_id=payload.pet_id,
         text=f"{payload.title}: {payload.description}",
         date=payload.remind_at,
+        due_date=recurrence.parse_reminder_date(payload.remind_at),
+        repeat_rule=payload.repeat,
     )
     return {"message": "Hatırlatıcı başarıyla kuruldu!", "reminder_id": reminder.id}
 
 
+def advance_repeating(db: Session, reminders, today) -> None:
+    """Tarihi geçmiş tekrarlı hatırlatıcıyı bir sonraki tekrara taşır.
+
+    Zamanlayıcı her gün yapıyor; liste açılırken de yapılıyor ki arada
+    dünkü tarih "geçmiş" görünmesin.
+    """
+    changed = False
+    for rem in reminders:
+        if not rem.repeat_rule or rem.due_date is None or rem.due_date >= today:
+            continue
+        nxt = recurrence.first_on_or_after(rem.repeat_start or rem.due_date, rem.repeat_rule, today)
+        rem.due_date = nxt
+        rem.date = recurrence.format_reminder_date(nxt)
+        changed = True
+    if changed:
+        db.commit()
+
+
 def get_pet_reminders(db: Session, pet_id: int, user: models.User):
     _get_owned_pet(db, pet_id, user)
-    return repositories.get_reminders_by_pet(db, pet_id)
+    reminders = repositories.get_reminders_by_pet(db, pet_id)
+    advance_repeating(db, reminders, recurrence.local_today())
+    return reminders
 
 
 def get_pet_reminder_history(db: Session, pet_id: int, user: models.User):
     _get_owned_pet(db, pet_id, user)
     reminders = repositories.get_reminders_by_pet(db, pet_id)
-    today = datetime.utcnow().date()
+    today = recurrence.local_today()
+    advance_repeating(db, reminders, today)
 
-    def is_past(reminder_date: str) -> bool:
-        try:
-            return datetime.strptime(reminder_date, "%d/%m/%Y").date() < today
-        except ValueError:
-            return False
+    def is_past(rem) -> bool:
+        due = rem.due_date or recurrence.parse_reminder_date(rem.date)
+        return due is not None and due < today
 
-    return [rem for rem in reminders if is_past(rem.date)]
+    return [rem for rem in reminders if is_past(rem)]
 
 
 def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.ReminderUpdate, user: models.User) -> dict:
@@ -347,6 +368,8 @@ def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.Reminde
         reminder,
         text=f"{payload.title}: {payload.description}",
         date=payload.remind_at,
+        due_date=recurrence.parse_reminder_date(payload.remind_at),
+        repeat_rule=payload.repeat,
     )
     return {"message": "Hatırlatıcı güncellendi.", "reminder_id": reminder.id}
 

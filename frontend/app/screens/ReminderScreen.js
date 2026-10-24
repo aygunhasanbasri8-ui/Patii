@@ -31,6 +31,21 @@ function formatDate(date) {
   return `${d}/${m}/${y}`;
 }
 
+// Sunucu RRULE'un küçük bir alt kümesini kabul ediyor (backend/app/recurrence.py)
+export const REPEAT_OPTIONS = [
+  { value: null, label: 'Tekrar yok' },
+  { value: 'FREQ=DAILY;INTERVAL=1', label: 'Her gün' },
+  { value: 'FREQ=WEEKLY;INTERVAL=1', label: 'Her hafta' },
+  { value: 'FREQ=MONTHLY;INTERVAL=1', label: 'Her ay' },
+  { value: 'FREQ=MONTHLY;INTERVAL=3', label: '3 ayda bir' },
+  { value: 'FREQ=YEARLY;INTERVAL=1', label: 'Her yıl' },
+];
+
+function repeatLabel(rule) {
+  if (!rule) return null;
+  return REPEAT_OPTIONS.find((o) => o.value === rule)?.label || 'Tekrarlı';
+}
+
 function ReminderRow({ reminder, onDelete, onEdit, past = false }) {
   const [title, ...rest] = reminder.text.split(': ');
   const description = rest.join(': ');
@@ -41,7 +56,15 @@ function ReminderRow({ reminder, onDelete, onEdit, past = false }) {
           <Text style={styles.reminderTitle}>{title}</Text>
           {description ? <Text style={styles.reminderDescription}>{description}</Text> : null}
         </View>
-        <Badge label={reminder.date} tone={past ? 'danger' : 'primary'} />
+        <View style={styles.badgeColumn}>
+          <Badge label={reminder.date} tone={past ? 'danger' : 'primary'} />
+          {repeatLabel(reminder.repeat_rule) ? (
+            <View style={styles.repeatHint}>
+              <Ionicons name="repeat" size={12} color={colors.textSecondary} />
+              <Text style={styles.repeatHintText}>{repeatLabel(reminder.repeat_rule)}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
       {!past ? (
         <View style={styles.actionRow}>
@@ -166,6 +189,23 @@ export default function ReminderScreen({
             </>
           )}
 
+          <Text style={[styles.dateFieldLabel, { marginTop: spacing.md }]}>Tekrar</Text>
+          <View style={styles.repeatRow}>
+            {REPEAT_OPTIONS.map((option) => {
+              const active = (form.repeat || null) === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.label}
+                  style={[styles.repeatChip, active && styles.repeatChipActive]}
+                  onPress={() => setForm((p) => ({ ...p, repeat: option.value }))}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.repeatChipText, active && styles.repeatChipTextActive]}>{option.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <Button
             title={isEditing ? 'Güncelle' : 'Hatırlatıcı Ekle'}
             loading={loading}
@@ -211,6 +251,21 @@ export default function ReminderScreen({
 }
 
 const styles = StyleSheet.create({
+  badgeColumn: { alignItems: 'flex-end' },
+  repeatHint: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  repeatHintText: { ...typography.caption, color: colors.textSecondary, marginLeft: 3 },
+  repeatRow: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -spacing.xs / 2 },
+  repeatChip: {
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    margin: spacing.xs / 2,
+  },
+  repeatChipActive: { borderColor: colors.primary, backgroundColor: colors.surfaceSoft },
+  repeatChipText: { ...typography.caption, color: colors.textSecondary },
+  repeatChipTextActive: { color: colors.primaryDark },
   flex: { flex: 1, backgroundColor: colors.background },
   emptyContainer: { flex: 1, backgroundColor: colors.background },
   container: { padding: spacing.xl, paddingBottom: spacing.xxxl, backgroundColor: colors.background, flexGrow: 1 },

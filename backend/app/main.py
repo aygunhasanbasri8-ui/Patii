@@ -8,9 +8,10 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
-from .db import engine
+from .db import SessionLocal, engine
 from .ml_model import load_model
 from .models import Base
+from .notifications import ReminderScheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,3 +71,15 @@ def startup():
         logger.error("Tablo oluşturma hatası: %s", exc)
 
     load_model()
+
+    # Birden çok worker/replika olursa her biri çalışır; gönderim koşullu UPDATE ile tekilleşiyor
+    if os.getenv("REMINDER_NOTIFICATIONS", "1") != "0":
+        app.state.reminder_scheduler = ReminderScheduler(SessionLocal)
+        app.state.reminder_scheduler.start()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    scheduler = getattr(app.state, "reminder_scheduler", None)
+    if scheduler is not None:
+        scheduler.stop()
