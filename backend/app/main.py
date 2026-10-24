@@ -18,6 +18,16 @@ logger = logging.getLogger(__name__)
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 os.makedirs(os.path.join(_STATIC_DIR, "uploads"), exist_ok=True)
 
+
+class _SafeStaticFiles(StaticFiles):
+    # Doğrulamadan önce yüklenmiş .html/.svg gibi dosyalar aynı origin'de script çalıştırmasın
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        return response
+
+
 app = FastAPI()
 
 # PRODUCTION'DA "*" yerine spesifik domain listesi kullan (ALLOWED_ORIGINS env var).
@@ -32,7 +42,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+app.mount("/static", _SafeStaticFiles(directory=_STATIC_DIR), name="static")
 app.include_router(router)
 
 

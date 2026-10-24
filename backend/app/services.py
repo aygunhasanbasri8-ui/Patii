@@ -1,19 +1,14 @@
 import logging
-import os
 import random
 import secrets
-import time
 from datetime import datetime, timedelta
 
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, llm, mail, ml_model, repositories, schemas
+from . import core, llm, mail, ml_model, repositories, schemas, uploads
 
 logger = logging.getLogger(__name__)
-
-_APP_DIR = os.path.dirname(os.path.abspath(__file__))
-_UPLOADS_DIR = os.path.join(_APP_DIR, "..", "static", "uploads")
 
 _RESEND_COOLDOWN_SECONDS = 60
 _RESET_CODE_EXPIRE_MINUTES = 15
@@ -213,21 +208,12 @@ def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, t
     return {"message": "Pati bilgileri güncellendi.", "pet_id": pet.id}
 
 
-def upload_pet_avatar(
-    db: Session, pet_id: int, token: str, file_bytes: bytes, filename: str
-) -> dict:
+def upload_pet_avatar(db: Session, pet_id: int, token: str, file_bytes: bytes) -> dict:
     user = _get_user_from_token(db, token)
     pet = _get_owned_pet(db, pet_id, user)
 
-    os.makedirs(_UPLOADS_DIR, exist_ok=True)
-    ext = os.path.splitext(filename)[1].lower() or ".jpg"
-    safe_name = f"pet_{pet_id}_{int(time.time())}{ext}"
-    filepath = os.path.join(_UPLOADS_DIR, safe_name)
-
-    with open(filepath, "wb") as f:
-        f.write(file_bytes)
-
-    avatar_value = f"/static/uploads/{safe_name}"
+    image_bytes, ext = uploads.sanitize_avatar(file_bytes)
+    avatar_value = uploads.save_upload(image_bytes, f"pet_{pet_id}", ext)
     repositories.update_pet_avatar(db, pet, "photo", avatar_value)
     return {"avatar_type": "photo", "avatar_value": avatar_value}
 

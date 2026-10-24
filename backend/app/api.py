@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from . import db, schemas, services
+from . import db, schemas, services, uploads
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 router = APIRouter(prefix="/api")
@@ -82,9 +82,9 @@ async def upload_pet_avatar(
     session: Session = Depends(db.get_db),
     token: str = Depends(oauth2_scheme),
 ):
-    file_bytes = await file.read()
-    filename = file.filename or "photo.jpg"
-    return services.upload_pet_avatar(session, pet_id, token, file_bytes, filename)
+    # Limitin 1 baytı fazlası okunuyor, dosyanın tamamını belleğe almadan "çok büyük" anlaşılsın
+    file_bytes = await file.read(uploads.MAX_AVATAR_BYTES + 1)
+    return services.upload_pet_avatar(session, pet_id, token, file_bytes)
 
 
 @router.post("/analyze/meow")

@@ -1,3 +1,16 @@
+import io
+
+from PIL import Image
+
+from app import uploads
+
+
+def _image_bytes(fmt: str) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), "orange").save(buf, fmt)
+    return buf.getvalue()
+
+
 class TestRegister:
     def test_register_success(self, client):
         response = client.post("/api/auth/register", json={
@@ -97,30 +110,59 @@ class TestPets:
         assert pets[0]["avatar_type"] == "icon"
         assert pets[0]["avatar_value"] == "🐱"
 
-    def test_upload_pet_avatar_photo(self, client, registered_user, auth_token):
-        login_resp = client.post("/api/auth/login", json={
-            "email": registered_user["email"],
-            "password": registered_user["password"]
-        })
-        user_id = login_resp.json()["user_id"]
-
-        add_resp = client.post("/api/pets/add", json={
+    def _add_pet(self, client, auth_token):
+        resp = client.post("/api/pets/add", json={
             "name": "Pamuk",
             "species": "Kedi",
             "breed": "Van",
         }, headers={"Authorization": f"Bearer {auth_token}"})
-        pet_id = add_resp.json()["pet_id"]
+        return resp.json()["pet_id"]
 
-        fake_image = b"\x89PNG\r\n\x1a\n" + b"\x00" * 50  # fake PNG header
-        resp = client.post(
+    def _upload(self, client, auth_token, pet_id, content, name="avatar.png", mime="image/png"):
+        return client.post(
             f"/api/pets/{pet_id}/avatar",
             headers={"Authorization": f"Bearer {auth_token}"},
-            files={"file": ("avatar.png", fake_image, "image/png")},
+            files={"file": (name, content, mime)},
         )
+
+    def test_upload_pet_avatar_photo(self, client, registered_user, auth_token):
+        pet_id = self._add_pet(client, auth_token)
+
+        # Expo uzantıya bakıp image/jpg gibi geçersiz bir tür yollayabiliyor; ad ve tür görmezden gelinmeli
+        resp = self._upload(client, auth_token, pet_id, _image_bytes("JPEG"), "../../x.html", "image/jpg")
         assert resp.status_code == 200
         data = resp.json()
         assert data["avatar_type"] == "photo"
-        assert data["avatar_value"].startswith("/static/uploads/")
+        assert data["avatar_value"].startswith("/static/uploads/pet_")
+        assert data["avatar_value"].endswith(".jpg") and ".." not in data["avatar_value"]
+        assert client.get(data["avatar_value"]).headers["x-content-type-options"] == "nosniff"
+
+    def test_upload_pet_avatar_strips_exif(self, client, registered_user, auth_token):
+        pet_id = self._add_pet(client, auth_token)
+        exif = Image.Exif()
+        exif[0x010F] = "GizliMarka"
+        buf = io.BytesIO()
+        Image.new("RGB", (8, 8)).save(buf, "JPEG", exif=exif)
+
+        value = self._upload(client, auth_token, pet_id, buf.getvalue()).json()["avatar_value"]
+        stored = client.get(value).content
+        assert b"GizliMarka" not in stored
+        assert not Image.open(io.BytesIO(stored)).getexif()
+
+    def test_upload_pet_avatar_rejects_non_image(self, client, registered_user, auth_token):
+        pet_id = self._add_pet(client, auth_token)
+
+        html = b"<html><script>alert(1)</script></html>"
+        assert self._upload(client, auth_token, pet_id, html, "a.png").status_code == 415
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        assert self._upload(client, auth_token, pet_id, svg, "a.svg", "image/svg+xml").status_code == 415
+        assert self._upload(client, auth_token, pet_id, _image_bytes("GIF"), "a.gif", "image/gif").status_code == 415
+
+    def test_upload_pet_avatar_rejects_oversized(self, client, registered_user, auth_token):
+        pet_id = self._add_pet(client, auth_token)
+
+        too_big = _image_bytes("PNG") + b"\x00" * (uploads.MAX_AVATAR_BYTES + 1)
+        assert self._upload(client, auth_token, pet_id, too_big).status_code == 413
 
     def test_add_pet_no_auth(self, client):
         response = client.post("/api/pets/add", json={
