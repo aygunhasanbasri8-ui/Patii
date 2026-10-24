@@ -4,7 +4,7 @@ sqlalchemy==2.0.27
 psycopg2-binary==2.9.9
 pydantic>=2.6.3,<3.0.0
 python-multipart==0.0.9
-Pillow>=11.3.0,<12
+Pillow>=13.0.0,<14
 # Sadece S3_BUCKET tanımlıyken import ediliyor (R2/S3 avatar depolama)
 boto3>=1.34,<2
 # zoneinfo için; slim imajda sistem saat dilimi verisine güvenmeyelim
