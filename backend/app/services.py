@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
-from . import core, llm, mail, ml_model, repositories, schemas, uploads
+from . import core, llm, mail, ml_model, models, repositories, schemas, uploads
 from .rate_limit import login_limiter
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ def reset_password(db: Session, payload: schemas.ResetPassword) -> dict:
     return {"message": "Şifre başarıyla güncellendi."}
 
 
-def _get_user_from_token(db: Session, token: str):
+def get_user_from_token(db: Session, token: str):
     email = core.get_current_user_email(token)
     user = repositories.get_user_by_email(db, email)
     if not user:
@@ -184,8 +184,7 @@ def _get_owned_pet(db: Session, pet_id: int, user):
     return pet
 
 
-def add_pet_for_owner(db: Session, payload: schemas.PetCreate, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def add_pet_for_owner(db: Session, payload: schemas.PetCreate, user: models.User) -> dict:
     pet = repositories.create_pet(
         db=db,
         name=payload.name,
@@ -198,15 +197,18 @@ def add_pet_for_owner(db: Session, payload: schemas.PetCreate, token: str) -> di
     return {"message": f"{pet.name} güvenli şekilde eklendi!", "owner": user.email, "pet_id": pet.id}
 
 
-def get_owner_pets(db: Session, owner_id: int, token: str):
-    user = _get_user_from_token(db, token)
+def get_my_pets(db: Session, user: models.User):
+    return repositories.get_pets_by_owner(db, user.id)
+
+
+# Eski mobil sürümler bu yolu kullanıyor; yeni istemciler /pets/me'yi kullanmalı
+def get_owner_pets(db: Session, owner_id: int, user: models.User):
     if user.id != owner_id:
         raise HTTPException(status_code=403, detail="Bu işlem için yetkin yok!")
-    return repositories.get_pets_by_owner(db, owner_id)
+    return get_my_pets(db, user)
 
 
-def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, user: models.User) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
     repositories.update_pet(
         db, pet,
@@ -219,8 +221,7 @@ def update_pet_for_owner(db: Session, pet_id: int, payload: schemas.PetUpdate, t
     return {"message": "Pati bilgileri güncellendi.", "pet_id": pet.id}
 
 
-def upload_pet_avatar(db: Session, pet_id: int, token: str, file_bytes: bytes) -> dict:
-    user = _get_user_from_token(db, token)
+def upload_pet_avatar(db: Session, pet_id: int, user: models.User, file_bytes: bytes) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
 
     image_bytes, ext = uploads.sanitize_avatar(file_bytes)
@@ -229,8 +230,7 @@ def upload_pet_avatar(db: Session, pet_id: int, token: str, file_bytes: bytes) -
     return {"avatar_type": "photo", "avatar_value": avatar_value}
 
 
-def remove_pet_for_owner(db: Session, pet_id: int, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def remove_pet_for_owner(db: Session, pet_id: int, user: models.User) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
     repositories.delete_pet(db, pet)
     return {"message": "Pati silindi."}
@@ -251,8 +251,7 @@ def _contextual_uncertain_advice(db: Session, pet) -> str | None:
     return llm.generate_text(prompt, max_output_tokens=150)
 
 
-def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None = None) -> dict:
-    user = _get_user_from_token(db, token)
+def analyze_meow(db: Session, pet_id: int, user: models.User, audio_bytes: bytes | None = None) -> dict:
     pet = _get_owned_pet(db, pet_id, user)
 
     logger.info(
@@ -298,8 +297,7 @@ def analyze_meow(db: Session, pet_id: int, token: str, audio_bytes: bytes | None
     }
 
 
-def add_reminder(db: Session, payload: schemas.ReminderCreate, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def add_reminder(db: Session, payload: schemas.ReminderCreate, user: models.User) -> dict:
     _get_owned_pet(db, payload.pet_id, user)
 
     reminder = repositories.create_reminder(
@@ -311,14 +309,12 @@ def add_reminder(db: Session, payload: schemas.ReminderCreate, token: str) -> di
     return {"message": "Hatırlatıcı başarıyla kuruldu!", "reminder_id": reminder.id}
 
 
-def get_pet_reminders(db: Session, pet_id: int, token: str):
-    user = _get_user_from_token(db, token)
+def get_pet_reminders(db: Session, pet_id: int, user: models.User):
     _get_owned_pet(db, pet_id, user)
     return repositories.get_reminders_by_pet(db, pet_id)
 
 
-def get_pet_reminder_history(db: Session, pet_id: int, token: str):
-    user = _get_user_from_token(db, token)
+def get_pet_reminder_history(db: Session, pet_id: int, user: models.User):
     _get_owned_pet(db, pet_id, user)
     reminders = repositories.get_reminders_by_pet(db, pet_id)
     today = datetime.utcnow().date()
@@ -332,8 +328,7 @@ def get_pet_reminder_history(db: Session, pet_id: int, token: str):
     return [rem for rem in reminders if is_past(rem.date)]
 
 
-def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.ReminderUpdate, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.ReminderUpdate, user: models.User) -> dict:
     reminder = repositories.get_reminder_by_id(db, rem_id)
     if not reminder:
         raise HTTPException(status_code=404, detail="Hatırlatıcı bulunamadı!")
@@ -347,8 +342,7 @@ def update_reminder_for_owner(db: Session, rem_id: int, payload: schemas.Reminde
     return {"message": "Hatırlatıcı güncellendi.", "reminder_id": reminder.id}
 
 
-def remove_reminder(db: Session, rem_id: int, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def remove_reminder(db: Session, rem_id: int, user: models.User) -> dict:
     reminder = repositories.get_reminder_by_id(db, rem_id)
     if not reminder:
         raise HTTPException(status_code=404, detail="Hatırlatıcı zaten yok!")
@@ -393,8 +387,7 @@ def _keyword_fallback_answer(question: str) -> str:
     return _DEFAULT_ANSWER
 
 
-def ask_chatbot(db: Session, payload: schemas.ChatAsk, token: str) -> dict:
-    user = _get_user_from_token(db, token)
+def ask_chatbot(db: Session, payload: schemas.ChatAsk, user: models.User) -> dict:
 
     question = (payload.question or "").strip()
     if not question:

@@ -195,6 +195,16 @@ class TestPets:
         too_big = _image_bytes("PNG") + b"\x00" * (uploads.MAX_AVATAR_BYTES + 1)
         assert self._upload(client, auth_token, pet_id, too_big).status_code == 413
 
+    def test_my_pets_me_matches_legacy_endpoint(self, client, registered_user, auth_token):
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        user_id = client.post("/api/auth/login", json=registered_user).json()["user_id"]
+        self._add_pet(client, auth_token)
+
+        me = client.get("/api/pets/me", headers=headers)
+        assert me.status_code == 200 and len(me.json()) == 1
+        assert me.json() == client.get(f"/api/pets/my-pets/{user_id}", headers=headers).json()
+        assert client.get("/api/pets/me").status_code == 401
+
     def test_add_pet_no_auth(self, client):
         response = client.post("/api/pets/add", json={
             "name": "Boncuk",
